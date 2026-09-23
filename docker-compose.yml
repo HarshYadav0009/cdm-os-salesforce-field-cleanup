@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: pgvector/pgvector:latest
+    container_name: cdm-postgress
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cdm_os
+      POSTGRES_PASSWORD: cdm_Admin
+      POSTGRES_DB: cdm_paaword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cdm_os -d cdm_paaword"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:latest
+    container_name: cdm-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+
+
+
+
+
