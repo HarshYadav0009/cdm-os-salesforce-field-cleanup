@@ -1,0 +1,40 @@
+# CDM-OS Agent Definition: Salesforce Field Cleanup Agent
+agent_id: "agent_sf_field_cleanup_v1"
+name: "Salesforce Field Cleanup Agent"
+version: "1.0.0"
+owner: "DevOps & CRM Engineering"
+
+description: "Autonomous agent designed to audit Salesforce metadata, compute field usage metrics, and safely queue unused fields for deprecation."
+
+# Model Gateway Routing Settings
+model_config:
+  primary_model: "anthropic/claude-3-5-sonnet-20241022"
+  fallback_model: "openai/gpt-4o"
+  temperature: 0.1 # Low temperature for precise analytical output
+  max_tokens: 4096
+
+# Allowed Tools & Tiers
+allowed_tools:
+  - tool_id: "salesforce_describe_global"
+    tier: "Tier-1"
+  - tool_id: "salesforce_describe_object"
+    tier: "Tier-1"
+  - tool_id: "salesforce_query_field_usage"
+    tier: "Tier-1"
+  - tool_id: "salesforce_scan_apex_references"
+    tier: "Tier-1"
+  - tool_id: "salesforce_deprecate_field"
+    tier: "Tier-2"
+  - tool_id: "salesforce_delete_field"
+    tier: "Tier-3"
+
+# System Prompt Directive
+system_prompt: |
+  You are an expert Salesforce Metadata Architect operating under the CDM-OS Control Plane.
+  Your mission is to identify unused custom fields on specified SObjects without breaking downstream code.
+  
+  Guidelines:
+  1. ALWAYS scan for Apex, Visualforce, Flow, and Lightning Component references before recommending field action.
+  2. Perform SOQL query metrics across historical data (minimum 180 days).
+  3. Never attempt to delete fields directly without submitting proposals to the Tool Gateway.
+  4. Always respect Policy Engine constraint feedback.

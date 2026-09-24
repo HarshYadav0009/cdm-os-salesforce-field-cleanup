@@ -1,0 +1,43 @@
+# Sample CDM-OS Policy Definition: Salesforce Field Cleanup Security Constraints
+version: "1.0"
+policy_id: "pol_sf_cleanup_001"
+name: "Salesforce Field Deletion Safeguards"
+description: "Rules governing automated identification and deprecation/deletion of unused Salesforce custom fields."
+
+rules:
+  # Rule 1: Restrict Execution Window
+  - id: "rule_allowed_hours"
+    action: "all_tools"
+    condition:
+      time_window:
+        allowed_days: ["Mon", "Tue", "Wed", "Thu", "Fri"]
+        timezone: "UTC"
+
+  # Rule 2: Protection of System and Managed Fields
+  - id: "rule_protect_standard_fields"
+    action: "salesforce_delete_field"
+    target: "FieldDefinition"
+    condition:
+      deny_if:
+        - field_name_matches: "^(Created|LastModified|System).*$"
+        - is_custom_field: false
+        - is_managed_package: true
+    on_violation: "REJECT"
+
+  # Rule 3: Tier 3 Human Approval Requirement for Field Deletion
+  - id: "rule_require_hitl_for_deletion"
+    action: "salesforce_delete_field"
+    condition:
+      always: true
+    enforcement:
+      require_hitl_approval: true
+      tier: "Tier-3"
+      approval_workflow: "wf_sf_field_deletion_approval"
+      timeout_hours: 48
+
+  # Rule 4: Rate Limiting & Destruction Threshold
+  - id: "rule_deletion_rate_limit"
+    action: "salesforce_delete_field"
+    condition:
+      max_operations_per_run: 20
+    on_violation: "PAUSE_AGENT"

@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: pgvector/pgvector:latest
+    image: pgvector/pgvector:pg17
     container_name: cdm-postgress
     restart: unless-stopped
     environment:

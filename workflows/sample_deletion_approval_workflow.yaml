@@ -1,0 +1,59 @@
+# Sample CDM-OS Workflow: Tier 3 Field Deletion Approval Flow
+workflow_id: "wf_sf_field_deletion_approval"
+name: "Salesforce Custom Field Deletion Approval Workflow"
+tier: "Tier-3"
+description: "Human-in-the-loop verification pipeline for executing custom field removals."
+
+trigger:
+  event: "POLICY_GATE_HITL_REQUIRED"
+  policy_id: "pol_sf_cleanup_001"
+
+steps:
+  - step_id: "step_1_create_jira_audit"
+    name: "Create Jira Audit Ticket"
+    action: "jira_create_issue"
+    params:
+      project: "SFGOV"
+      issue_type: "Task"
+      summary: "Approval Request: Delete Custom Field ${field_api_name} on ${object_name}"
+      description: |
+        Agent ${agent_id} has requested field deletion.
+        - Object: ${object_name}
+        - Field API Name: ${field_api_name}
+        - Usage Score: 0% (0 records in last 180 days)
+        - Apex References: None found
+        - Impact Assessment: Low Risk
+
+  - step_id: "step_2_send_slack_notification"
+    name: "Notify Salesforce Admin Team"
+    action: "slack_post_message"
+    params:
+      channel: "#sf-governance-approvals"
+      message: "🚨 *Field Deletion Proposal* requiring review: Field `${field_api_name}` on `${object_name}`. [Review in Governance UI](${governance_ui_url})"
+
+  - step_id: "step_3_await_human_decision"
+    name: "Await Admin Sign-Off"
+    action: "hitl_wait_approval"
+    params:
+      required_roles: ["Salesforce_Admin", "Compliance_Officer"]
+      min_approvals: 1
+      timeout_seconds: 172800 # 48 hours
+
+  - step_id: "step_4_execute_or_cancel"
+    name: "Route Execution Based on Decision"
+    type: "conditional"
+    conditions:
+      - when: "${step_3_await_human_decision.status == 'APPROVED'}"
+        next: "step_execute_deletion"
+      - when: "${step_3_await_human_decision.status == 'REJECTED'}"
+        next: "step_log_rejection"
+
+  - step_id: "step_execute_deletion"
+    name: "Execute Tool Call"
+    action: "tool_gateway_release_execution"
+
+  - step_id: "step_log_rejection"
+    name: "Log Rejection"
+    action: "audit_log_record"
+    params:
+      status: "REJECTED_BY_HUMAN"
