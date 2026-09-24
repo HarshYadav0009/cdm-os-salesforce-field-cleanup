@@ -43,14 +43,14 @@ allowed:
     - qa
 
 allowed_actions:
-    - read_ec2
-    - stop_ec2
-    - resize_ec2
+  - read_ec2
+  - stop_ec2
+  - resize_ec2
 
 denied_actions:
-    - delete_rds
-    - modify_iam
-    - modify_network
+  - delete_rds
+  - modify_iam
+  - modify_network
 
 max_cost_per_operation: 500
 max_resources_per_operation: 10

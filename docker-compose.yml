@@ -1,36 +1,64 @@
+# ==============================================================================
+# CDM-OS — Local Development Stack
+# Usage: docker compose up -d
+# ==============================================================================
+
 services:
+  # ---------- PostgreSQL with pgvector extension ----------
   postgres:
     image: pgvector/pgvector:pg17
-    container_name: cdm-postgress
+    container_name: cdm-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: cdm_os
-      POSTGRES_PASSWORD: cdm_Admin
-      POSTGRES_DB: cdm_paaword
+      POSTGRES_USER: cdm_admin
+      POSTGRES_PASSWORD: cdm_secure_password
+      POSTGRES_DB: cdm_os_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./control-plane/database/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cdm_os -d cdm_paaword"]
+      test: ["CMD-SHELL", "pg_isready -U cdm_admin -d cdm_os_db"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  # ---------- Redis (Cache, Pub/Sub Event Bus) ----------
   redis:
-    image: redis:latest
+    image: redis:7-alpine
     container_name: cdm-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ---------- CDM-OS Control Plane API ----------
+  control-plane:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cdm-control-plane
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn control_plane.main:app --host 0.0.0.0 --port 8000 --reload
 
 volumes:
   postgres_data:
   redis_data:
-
-
-
-
-
