@@ -77,7 +77,14 @@ class PolicyEngine:
     """
 
     def __init__(self, definitions_path: Optional[str] = None):
-        self.definitions_path = Path(definitions_path or settings.POLICY_DEFINITIONS_PATH)
+        target_path = Path(definitions_path or settings.POLICY_DEFINITIONS_PATH)
+        if not target_path.exists():
+            project_root = Path(__file__).resolve().parent.parent
+            candidate = project_root / target_path
+            if candidate.exists():
+                target_path = candidate
+
+        self.definitions_path = target_path
         self.rules: list[ParsedRule] = []
         self._mode = settings.POLICY_MODE  # enforce | audit_only | dry_run
 

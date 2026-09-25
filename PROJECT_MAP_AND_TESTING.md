@@ -71,12 +71,21 @@ d:\rdc-os-salesforce-field-cleanup\
 │       ├── README.md            # Field cleanup agent documentation
 │       └── config.yaml          # Agent configuration, LLM parameters, allowed tools
 │
+├── model_gateway/                # Hot-swappable LLM Model Gateway & Gemini Free support
+│   ├── __init__.py              # Package marker
+│   ├── gateway.py               # Core router & model fallback handling
+│   ├── model_registry.py        # Model catalog & Gemini Free quota limits
+│   ├── rate_limiter.py          # Sliding-window RPM, RPD, TPM rate limiter
+│   ├── cost_tracker.py          # Token cost tracking (zero cost for Gemini Free)
+│   └── gemini_provider.py       # Google Gemini Free API client & offline generator
+│
 └── tests/                       # Automated test suite
     ├── README.md                # Testing strategy overview
     └── unit/                    # Unit tests (run via Pytest)
         ├── test_policy_engine.py # Tests for PolicyEngine evaluation & rule matching
         ├── test_audit.py        # Tests for HMAC signing & tamper verification
-        └── test_main_app.py     # Tests for FastAPI root and health check endpoints
+        ├── test_main_app.py     # Tests for FastAPI root and health check endpoints
+        └── test_model_gateway.py # Tests for Gemini Free tier routing, costs, and rate limits
 ```
 
 ---

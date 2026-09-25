@@ -6,10 +6,10 @@ owner: "DevOps & CRM Engineering"
 
 description: "Autonomous agent designed to audit Salesforce metadata, compute field usage metrics, and safely queue unused fields for deprecation."
 
-# Model Gateway Routing Settings
+# Model Gateway Routing Settings (Supports Gemini Free, Anthropic, OpenAI)
 model_config:
-  primary_model: "anthropic/claude-3-5-sonnet-20241022"
-  fallback_model: "openai/gpt-4o"
+  primary_model: "gemini/gemini-1.5-flash" # Gemini Free Tier primary model
+  fallback_model: "anthropic/claude-3-5-sonnet-20241022"
   temperature: 0.1 # Low temperature for precise analytical output
   max_tokens: 4096
 

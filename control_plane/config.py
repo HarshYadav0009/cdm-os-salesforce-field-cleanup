@@ -46,10 +46,13 @@ class Settings(BaseSettings):
     CDM_AUTH_ENABLED: bool = False  # Disabled for local dev by default
 
     # ── Model Gateway ─────────────────────────────────────────
-    MODEL_DEFAULT_PROVIDER: str = "anthropic"
-    MODEL_FALLBACK_PROVIDER: str = "openai"
+    MODEL_DEFAULT_PROVIDER: str = "gemini"
+    MODEL_FALLBACK_PROVIDER: str = "anthropic"
     ANTHROPIC_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
+    GOOGLE_API_KEY: Optional[str] = None
+    GEMINI_FREE_TIER: bool = True
 
     # ── Policy Engine ─────────────────────────────────────────
     POLICY_MODE: str = "enforce"  # enforce | audit_only | dry_run

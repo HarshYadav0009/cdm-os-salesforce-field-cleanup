@@ -264,13 +264,11 @@ python -m venv .venv
 .venv/Scripts/activate                   # Windows
 pip install -r requirements.txt
 
-# 4. Run the control plane API
-cd control-plane/api
-uvicorn app:app --reload --port 8000
+# 4. Run the control plane API (from project root)
+uvicorn control_plane.main:app --reload --port 8000
 
 # 5. Run tests
-cd ../../tests
-pytest unit/ -v
+pytest
 ```
 
 ---
