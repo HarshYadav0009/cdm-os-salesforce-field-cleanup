@@ -180,13 +180,25 @@ def human_decide(proposal_id: UUID, body: HumanDecision, db: Session = Depends(g
 
 
 # ── GET /proposals/pending — Shortcut for Governance UI ───────
-@router.get("/queue/pending", response_model=list[ProposalResponse])
-def get_pending_approvals(db: Session = Depends(get_db)):
-    """Get all proposals waiting for human approval (used by Governance UI)."""
+@router.get(
+    "/queue/pending",
+    response_model=list[ProposalResponse]
+)
+def get_pending_approvals(
+    db: Session = Depends(get_db)
+):
+    """Get all proposals waiting for human approval."""
+
     proposals = (
         db.query(Proposal)
-        .filter(Proposal.status == ProposalStatus.PENDING_HUMAN_APPROVAL)
-        .order_by(Proposal.created_at.asc())
+        .filter(
+            Proposal.status
+            == ProposalStatus.PENDING_HUMAN_APPROVAL
+        )
+        .order_by(
+            Proposal.created_at.asc()
+        )
         .all()
     )
+
     return proposals
