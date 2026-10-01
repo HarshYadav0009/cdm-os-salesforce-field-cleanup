@@ -1,5 +1,24 @@
 class FieldCleanupProposalBuilder:
 
+    def build_from_assessment(
+        self,
+        assessment_report: dict,
+        agent_id: str = "field-cleanup-agent",
+        tool_id: str = "salesforce_full_field_assessment",
+    ) -> dict:
+        """
+        Build a proposal payload from a full 3-phase Field Assessment report,
+        including data usage, reference scan results, and risk assessment.
+        """
+        if not assessment_report:
+            raise ValueError("assessment_report is required")
+
+        return {
+            "agent_id": agent_id,
+            "tool_id": tool_id,
+            "input_payload": assessment_report,
+        }
+
     def build(
         self,
         usage_result: dict,
@@ -50,4 +69,5 @@ class FieldCleanupProposalBuilder:
                 "zero_usage_candidate": usage_result.get("zero_usage_candidate", False),
                 "action": "REVIEW_FOR_DELETION",
             }
-        }
+        }
+

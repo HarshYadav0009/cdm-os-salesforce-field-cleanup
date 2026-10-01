@@ -29,6 +29,12 @@ class FieldUsageRequest(BaseModel):
     field_name: str
 
 
+class FieldAssessmentRequest(BaseModel):
+
+    object_name: str
+    field_name: str
+
+
 gateway = ToolGatewayService()
 
 
@@ -72,6 +78,8 @@ async def tools():
             "tools": [
                 {"name": "salesforce_describe_object", "description": "Read Salesforce object metadata"},
                 {"name": "salesforce_query_field_usage", "description": "Analyze Salesforce field population"},
+                {"name": "salesforce_scan_apex_references", "description": "Scan metadata and code references for a field"},
+                {"name": "salesforce_full_field_assessment", "description": "Run 3-phase safety assessment report"},
                 {"name": "salesforce_health_check", "description": "Verify Salesforce connectivity"},
             ],
             "source": "static_fallback",
@@ -128,3 +136,43 @@ async def field_usage(
             status_code=500,
             detail=str(exc)
         )
+
+
+@app.post("/tools/salesforce/scan-references")
+async def scan_references(
+    request: FieldAssessmentRequest
+):
+
+    try:
+
+        return await gateway.scan_apex_references(
+            request.object_name,
+            request.field_name
+        )
+
+    except Exception as exc:
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc)
+        )
+
+
+@app.post("/tools/salesforce/full-assessment")
+async def full_assessment(
+    request: FieldAssessmentRequest
+):
+
+    try:
+
+        return await gateway.full_field_assessment(
+            request.object_name,
+            request.field_name
+        )
+
+    except Exception as exc:
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc)
+        )

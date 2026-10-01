@@ -40,3 +40,29 @@ class ToolGatewayService:
                 field_name
             )
         )
+
+    async def scan_apex_references(
+        self,
+        object_name: str,
+        field_name: str
+    ):
+
+        return await (
+            self.salesforce.scan_apex_references(
+                object_name,
+                field_name
+            )
+        )
+
+    async def full_field_assessment(
+        self,
+        object_name: str,
+        field_name: str
+    ):
+
+        return await (
+            self.salesforce.full_field_assessment(
+                object_name,
+                field_name
+            )
+        )

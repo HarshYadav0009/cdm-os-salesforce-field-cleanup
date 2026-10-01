@@ -92,4 +92,21 @@ class SalesforceMCPClient:
         return await self._call_tool(
             "salesforce_query_field_usage",
             {"object_name": object_name, "field_name": field_name},
-        )
+        )
+
+    async def scan_apex_references(
+        self, object_name: str, field_name: str
+    ):
+        return await self._call_tool(
+            "salesforce_scan_apex_references",
+            {"object_name": object_name, "field_name": field_name},
+        )
+
+    async def full_field_assessment(
+        self, object_name: str, field_name: str
+    ):
+        return await self._call_tool(
+            "salesforce_full_field_assessment",
+            {"object_name": object_name, "field_name": field_name},
+        )
+

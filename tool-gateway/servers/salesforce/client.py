@@ -60,3 +60,23 @@ class SalesforceClient:
             self.sf,
             object_name
         ).describe()
+
+    def tooling_query(self, soql: str) -> dict:
+        """
+        Execute a read-only SOQL query against the Salesforce Tooling API.
+        Used to discover Apex, Flow, and other metadata dependencies.
+        """
+        return self.sf.toolingexecute(
+            f"query/?q={soql.replace(' ', '+')}"
+        )
+
+    def search_apex_source(self, search_string: str) -> dict:
+        """
+        Search Apex class/trigger source bodies for a string using SOSL.
+        Returns matching ApexClass and ApexTrigger records.
+        """
+        sosl = (
+            f"FIND {{{search_string}}} IN ALL FIELDS "
+            f"RETURNING ApexClass(Name, Body), ApexTrigger(Name, Body)"
+        )
+        return self.sf.search(sosl)
