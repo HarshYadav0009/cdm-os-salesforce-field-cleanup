@@ -273,6 +273,60 @@ pytest
 
 ---
 
+## 🚀 Salesforce Field Cleanup Capability
+
+The system implements a **3-Phase Safety & Reference Assessment Pipeline** before any custom field deletion proposal is sent for human review or execution:
+
+```
+               SALESFORCE FIELD CLEANUP ASSESSMENT PIPELINE
+               
+   ┌─────────────────────────────────────────────────────────────┐
+   │ Phase 1: Metadata Extraction                                │
+   │ Describe SObject, field type, label, nillable, custom flag  │
+   └──────────────────────────────┬──────────────────────────────┘
+                                  │
+                                  ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │ Phase 2: Data Usage Analysis                                │
+   │ Execute SOQL query to calculate % record population         │
+   └──────────────────────────────┬──────────────────────────────┘
+                                  │
+                                  ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │ Phase 3: Metadata & Code Reference Scan                     │
+   │ Scan Apex Classes, Triggers, Flows, Validation Rules,       │
+   │ Page Layouts, and Field History Tracking via Tooling API    │
+   └──────────────────────────────┬──────────────────────────────┘
+                                  │
+                                  ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │ Risk Classification & Report Generation                     │
+   │ - SAFE_TO_DELETE: 0% data + 0 references + no tracking     │
+   │ - NEEDS_REVIEW:   0% data + on layout / history tracked     │
+   │ - BLOCKED:        Referenced in Apex / Flow / Validation    │
+   └─────────────────────────────────────────────────────────────┘
+```
+
+### Reference Scanner Capabilities
+
+The **Apex Reference Scanner** (`tool-gateway/servers/salesforce/apex_references.py`) checks 6 metadata layers before allowing deletion:
+1. **Apex Classes**: Code body scan for field API name references.
+2. **Apex Triggers**: Trigger body scan on the target SObject.
+3. **Flows & Process Builders**: Tooling API query (`MetadataComponentDependency`).
+4. **Validation Rules**: Formula scanning on target SObject.
+5. **Page & Compact Layouts**: Layout dependency scan via Tooling API.
+6. **Field History Tracking**: Audit tracking verification.
+
+---
+
+## 📚 Documentation References
+
+- **[SETUP.md](./SETUP.md)** — Complete step-by-step installation, environment configuration, database migration, and test runner instructions.
+- **[FRONTEND_DEVELOPER_GUIDE.md](./FRONTEND_DEVELOPER_GUIDE.md)** — Full guide for frontend engineers, detailing Control Plane API endpoints, TypeScript interfaces, WebSocket event listeners, and human approval workflows.
+- **[SETUP_AND_FIXES.md](./SETUP_AND_FIXES.md)** — Technical summary of ORM portability fixes (SQLite/PostgreSQL `GUID` type helper) and Tool Gateway integration details.
+
+---
+
 ## Key Concepts
 
 | Concept | Definition |
@@ -295,3 +349,4 @@ pytest
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines, coding standards, and PR process.
+
