@@ -10,11 +10,47 @@ from datetime import datetime, timezone
 from sqlalchemy import (
     Column, String, Text, Boolean, ForeignKey, DateTime, Enum, Index
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.types import TypeDecorator, CHAR, JSON
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB as PG_JSONB
 from sqlalchemy.orm import relationship
 import enum
 
 from control_plane.database import Base
+
+
+# Dialect-compatible types for SQLite/Postgres portability
+JSONB = PG_JSONB().with_variant(JSON(), "sqlite")
+
+class GUID(TypeDecorator):
+    """Platform-independent GUID type. Uses PostgreSQL's UUID, otherwise CHAR(36)."""
+    impl = CHAR
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(PG_UUID(as_uuid=True))
+        else:
+            return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        if not isinstance(value, uuid.UUID):
+            return str(uuid.UUID(str(value)))
+        return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        if not isinstance(value, uuid.UUID):
+            return uuid.UUID(value)
+        return value
+
+def UUID(as_uuid=True):
+    return GUID()
+
+
+
 
 
 # ── Python Enums (mirror SQL ENUMs) ──────────────────────────

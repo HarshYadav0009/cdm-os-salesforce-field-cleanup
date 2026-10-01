@@ -7,14 +7,17 @@ from simple_salesforce import Salesforce
 class SalesforceClient:
 
     def __init__(self):
-        # Load .env from:
-        # tool-gateway/servers/.env
-        env_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            ".env"
-        )
+        # Walk up to the project root to find .env
+        current = os.path.dirname(os.path.abspath(__file__))
+        for _ in range(5):  # max 5 levels up
+            candidate = os.path.join(current, ".env")
+            if os.path.isfile(candidate):
+                load_dotenv(candidate)
+                break
+            current = os.path.dirname(current)
+        else:
+            load_dotenv()
 
-        load_dotenv(env_path)
 
         username = os.getenv("SF_USERNAME")
         password = os.getenv("SF_PASSWORD")

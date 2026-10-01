@@ -30,11 +30,14 @@ git clone https://github.com/<your-org>/rdc-os-salesforce-field-cleanup.git
 cd rdc-os-salesforce-field-cleanup
 ```
 
-### Step 2 — Start Local Infrastructure (PostgreSQL + Redis)
+### Step 2 — Start Local Infrastructure (Docker Compose)
 
 ```bash
-# Start database and cache containers (first run downloads images ~500MB)
+# Option A: Start DB & Redis only for local Python dev
 docker compose up postgres redis -d
+
+# Option B: Start Full Enterprise Stack (Control Plane + Tool Gateway + DB + Redis)
+docker compose up -d
 
 # Verify containers are healthy
 docker compose ps
@@ -42,285 +45,110 @@ docker compose ps
 
 You should see:
 ```
-NAME             STATUS                  PORTS
-cdm-postgres     running (healthy)       0.0.0.0:5432->5432/tcp
-cdm-redis        running (healthy)       0.0.0.0:6379->6379/tcp
+NAME                 STATUS                  PORTS
+cdm-postgres         running (healthy)       0.0.0.0:5432->5432/tcp
+cdm-redis            running (healthy)       0.0.0.0:6379->6379/tcp
+cdm-control-plane    running                 0.0.0.0:8000->8000/tcp
+cdm-tool-gateway     running                 0.0.0.0:8080->8080/tcp
 ```
 
 > **What just happened?**
-> - PostgreSQL is running on `localhost:5432` with the `cdm_os_db` database.
-> - The `init.sql` script automatically created all tables and seeded 7 Salesforce tool definitions.
-> - Redis is running on `localhost:6379` for caching and event pub/sub.
+> - **PostgreSQL** (`localhost:5432`) initialized `cdm_os_db` via `init.sql`.
+> - **Control Plane API** (`localhost:8000`) manages agents, proposals, policy enforcement, and audit logs.
+> - **Tool Gateway** (`localhost:8080`) hosts the FastMCP Salesforce tool server and bridge endpoints.
+> - **Redis** (`localhost:6379`) handles caching and event pub/sub.
 
-### Step 3 — Create Python Virtual Environment
+### Step 3 — Create Python Virtual Environment & Install Dependencies
 
 ```bash
 # Create venv
 python -m venv .venv
 
-# Activate it
+# Activate venv
 # Windows (PowerShell):
 .\.venv\Scripts\Activate.ps1
-# Windows (CMD):
-.\.venv\Scripts\activate.bat
 # macOS/Linux:
 source .venv/bin/activate
-```
 
-### Step 4 — Install Python Dependencies
-
-```bash
+# Install dependencies (Control Plane + Tool Gateway)
 pip install -r requirements.txt
+pip install -r tool-gateway/requirements.txt
 ```
 
-### Step 5 — Create Your `.env` File
+### Step 4 — Create & Configure Your `.env` File
 
 ```bash
-# Copy the template
 cp .env.example .env
 ```
 
-> The defaults in `.env.example` already match the `docker-compose.yml` settings.
-> No changes are needed for basic local development.
+Update your `.env` for Salesforce Sandbox connectivity (or keep empty for local dry-run testing):
+```env
+# --- Salesforce Connection ---
+SF_LOGIN_URL=https://test.salesforce.com
+SF_USERNAME=your-username@domain.com
+SF_PASSWORD=your-password
+SF_SECURITY_TOKEN=your-token
+SF_DOMAIN=test
+```
 
-### Step 6 — Verify the Control Plane Starts
+### Step 5 — Run Local API Services (Manual / Standalone Mode)
+
+If running outside Docker Compose, start the services in separate terminals:
 
 ```bash
-# Start the API server
-uvicorn control_plane.main:app --reload --port 8000
-```
-
-You should see:
-```
-CDM-OS Control Plane starting up
-  Environment : development
-  Policy mode : enforce
-  Database    : localhost:5432/cdm_os_db
-Policy Engine loaded 4 rules
-INFO:     Uvicorn running on http://0.0.0.0:8000
-```
-
-### Step 7 — Test the API
-
-Open your browser and go to:
-- **API Docs (Swagger)**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
-
-Or use `curl`:
-```bash
-# Health check
-curl http://localhost:8000/health
-
-# List seeded tools
-curl http://localhost:8000/api/v1/tools
-
-# Register an agent
-curl -X POST http://localhost:8000/api/v1/agents \
-  -H "Content-Type: application/json" \
-  -d '{
-    "agent_id": "agent_sf_field_cleanup_v1",
-    "name": "Salesforce Field Cleanup Agent",
-    "description": "Autonomous field deprecation agent"
-  }'
-
-# Submit a proposal (will trigger Policy Engine)
-curl -X POST http://localhost:8000/api/v1/proposals \
-  -H "Content-Type: application/json" \
-  -d '{
-    "agent_id": "agent_sf_field_cleanup_v1",
-    "tool_id": "salesforce_describe_object",
-    "input_payload": {"object_name": "Account"}
-  }'
-```
-
-✅ **You're now set up.** The Control Plane API is running, connected to the database, and the Policy Engine is loaded.
-
----
-
-## Part 2: Dev 2 — Tool Gateway & Salesforce MCP Setup
-
-After completing Part 1, you can start building Salesforce MCP tool servers.
-
-### Your Workspace
-
-Your primary directories:
-```
-tool-gateway/
-  servers/                  ← Create MCP server files here
-  mcp-gateway/              ← Gateway routing logic
-agents/
-  field-cleanup/
-    config.yaml             ← Already created, update as needed
-```
-
-### Extra Dependencies
-
-Add to your local venv:
-```bash
-pip install simple-salesforce
-```
-
-### Connecting to Salesforce Sandbox
-
-1. Sign up for a free Salesforce Developer Sandbox: [developer.salesforce.com/signup](https://developer.salesforce.com/signup)
-2. Update your `.env` file:
-   ```env
-   SF_LOGIN_URL=https://test.salesforce.com
-   SF_USERNAME=your-email@sandbox.com
-   SF_CONSUMER_KEY=your-connected-app-key
-   SF_PRIVATE_KEY_PATH=./config/certs/salesforce.key
-   ```
-
-### How Your Code Integrates
-
-Your MCP tools will be **called by the Control Plane** after a proposal is approved:
-
-```
-Agent proposes tool call
-        │
-        ▼
-Control Plane API (POST /api/v1/proposals)
-        │
-        ▼
-Policy Engine evaluates → ALLOWED / DENIED / NEEDS_HITL
-        │
-        ▼
-If approved → Control Plane calls YOUR MCP Server
-        │
-        ▼
-Your MCP server executes against Salesforce and returns result
-```
-
-### Key API Endpoints You'll Use
-
-| Endpoint | What For |
-|---|---|
-| `GET /api/v1/tools` | Verify your tools are registered |
-| `POST /api/v1/proposals` | Submit test proposals to see the policy engine in action |
-| `GET /api/v1/proposals/{id}` | Check proposal status after submission |
-
----
-
-## Part 3: Dev 3 — Governance UI & Frontend Setup
-
-After completing Part 1, you can start building the React Governance UI.
-
-### Your Workspace
-
-Your primary directories:
-```
-frontend/                   ← React/Vite app lives here
-workflows/                  ← YAML workflow definitions
-audit/                      ← Audit log viewer data
-```
-
-### Initialize the Frontend
-
-```bash
-cd frontend
-npx -y create-vite@latest . --template react-ts
-
-# Install dependencies
-npm install
-
-# Install API client library
-npm install axios
-
-# Start dev server (runs on http://localhost:5173)
-npm run dev
-```
-
-> The Control Plane API already has CORS configured to accept requests from `localhost:5173`.
-
-### Key API Endpoints You'll Use
-
-| Endpoint | What For |
-|---|---|
-| `GET /api/v1/proposals/queue/pending` | **Primary endpoint** — fetch proposals awaiting human approval |
-| `PUT /api/v1/proposals/{id}/decide` | Submit human APPROVE / REJECT decisions |
-| `GET /api/v1/proposals` | List all proposals with filtering |
-| `GET /api/v1/audit` | Fetch audit trail for compliance view |
-| `GET /api/v1/agents` | Show registered agents in the dashboard |
-| `GET /api/v1/tools` | Show registered tools and their tier badges |
-
-### API Response Shape (for UI rendering)
-
-A pending proposal response looks like:
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "agent_id": "agent_sf_field_cleanup_v1",
-  "tool_id": "salesforce_delete_field",
-  "status": "PENDING_HUMAN_APPROVAL",
-  "tier": "Tier-3",
-  "input_payload": {
-    "object_name": "Account",
-    "field_api_name": "Legacy_Code__c"
-  },
-  "policy_result": {
-    "allowed": true,
-    "requires_human_approval": true,
-    "matched_rules": ["rule_require_hitl_for_deletion"]
-  },
-  "created_at": "2026-09-24T12:00:00Z"
-}
-```
-
-To approve a proposal:
-```bash
-curl -X PUT http://localhost:8000/api/v1/proposals/<id>/decide \
-  -H "Content-Type: application/json" \
-  -d '{
-    "decision": "APPROVED",
-    "reviewer_email": "admin@company.com",
-    "reason": "Field confirmed unused across all environments"
-  }'
-```
-
----
-
-## Troubleshooting
-
-### Docker containers won't start
-```bash
-# Stop everything and remove volumes
-docker compose down -v
-# Restart fresh
-docker compose up postgres redis -d
-```
-
-### Database connection error
-- Make sure Docker Desktop is running
-- Check ports: `docker compose ps`
-- Verify `.env` matches `docker-compose.yml` credentials
-
-### `ModuleNotFoundError: No module named 'control_plane'`
-Make sure you're running from the **project root directory** (where `control_plane/` folder lives):
-```bash
-cd d:\rdc-os-salesforce-field-cleanup
-uvicorn control_plane.main:app --reload
-```
-
-### Policy Engine loaded 0 rules
-- Check that `policy/definitions/` directory contains `.yaml` files
-- Check the `POLICY_DEFINITIONS_PATH` in your `.env`
-
----
-
-## Daily Workflow
-
-```bash
-# 1. Start infrastructure (if containers stopped)
-docker compose up postgres redis -d
-
-# 2. Activate venv
-.\.venv\Scripts\Activate.ps1     # Windows
-source .venv/bin/activate         # macOS/Linux
-
-# 3. Start the API
+# Terminal 1: Control Plane API (Port 8000)
 uvicorn control_plane.main:app --reload --port 8000
 
-# 4. Your specific work...
-#    Dev 2: work in tool-gateway/servers/
-#    Dev 3: cd frontend && npm run dev
+# Terminal 2: Tool Gateway API (Port 8080)
+uvicorn tool-gateway.gateway.api:app --reload --port 8080
 ```
+
+---
+
+## 🧪 How to Verify Everything (End-to-End Test)
+
+Run the automated integration test script to verify the full flow:
+$$\text{Agent Proposal} \longrightarrow \text{Policy Engine Gate} \longrightarrow \text{Human Decision} \longrightarrow \text{MCP Tool Gateway Execution} \longrightarrow \text{HMAC Audit Log}$$
+
+```bash
+# Run automated end-to-end integration test
+.\.venv\Scripts\python.exe test_integration.py
+```
+
+Expected output:
+```
+INFO:cdm.policy:Loaded 4 rules from sample_field_cleanup_policy.yaml
+INFO:cdm.api.proposals:Proposal created: tool=salesforce_query_field_usage status=POLICY_APPROVED
+INFO:cdm.api.proposals:Proposal created: tool=salesforce_delete_field status=PENDING_HUMAN_APPROVAL
+INFO:cdm.api.proposals:Proposal APPROVED by admin@enterprise.com -> Status=HUMAN_APPROVED
+INFO:cdm.integration_test:Total Audit Trail Entries Logged: 5
+✅ INTEGRATION TEST PASSED! All core components connected successfully.
+```
+
+---
+
+## 🌐 System Services & Endpoints Reference
+
+| Service | Host & Port | URL / Docs | Purpose |
+|---|---|---|---|
+| **Control Plane API** | `http://localhost:8000` | [Swagger Docs](http://localhost:8000/docs) | Governance, proposal lifecycle, policy engine |
+| **Tool Gateway (MCP)** | `http://localhost:8080` | [Gateway Health](http://localhost:8080/health) | Salesforce MCP tool execution gateway |
+| **PostgreSQL Database** | `localhost:5432` | `cdm_os_db` | Agent definitions, proposals, policy rules, audit logs |
+| **Redis Event Bus** | `localhost:6379` | `redis://localhost:6379/0` | Cache and pub/sub messaging |
+| **React Governance UI** | `http://localhost:5173` | [Governance UI](http://localhost:5173) | Human-in-the-loop approval dashboard |
+
+---
+
+## Daily Workflow Summary
+
+```bash
+# 1. Start Infrastructure Stack
+docker compose up -d
+
+# 2. Run Test Verification
+.\.venv\Scripts\python.exe test_integration.py
+
+# 3. View API & Gateway Logs
+docker compose logs -f control-plane tool-gateway
+```
+

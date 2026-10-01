@@ -2,6 +2,7 @@ from fastmcp import FastMCP
 
 from servers.salesforce.metadata import SalesforceMetadataService
 from servers.salesforce.field_usage import SalesforceFieldUsageService
+from servers.salesforce.client import SalesforceClient
 
 
 # ============================================================
@@ -11,6 +12,15 @@ from servers.salesforce.field_usage import SalesforceFieldUsageService
 mcp = FastMCP(
     "Salesforce MCP Server"
 )
+
+# Shared client instance — single auth session
+_sf_client = None
+
+def _get_client():
+    global _sf_client
+    if _sf_client is None:
+        _sf_client = SalesforceClient()
+    return _sf_client
 
 
 # ============================================================
@@ -24,7 +34,7 @@ def salesforce_health_check() -> dict:
     can communicate with Salesforce.
     """
 
-    service = SalesforceMetadataService()
+    service = SalesforceMetadataService(client=_get_client())
 
     result = service.describe_object(
         "Account"
@@ -51,7 +61,7 @@ def salesforce_describe_object(
     This operation is read-only.
     """
 
-    service = SalesforceMetadataService()
+    service = SalesforceMetadataService(client=_get_client())
 
     return service.describe_object(
         object_name
@@ -77,12 +87,13 @@ def salesforce_query_field_usage(
     a deletion decision.
     """
 
-    service = SalesforceFieldUsageService()
+    service = SalesforceFieldUsageService(client=_get_client())
 
     return service.query_field_usage(
         object_name,
         field_name
     )
+
 
 
 # ============================================================

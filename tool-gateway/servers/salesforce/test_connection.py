@@ -1,4 +1,8 @@
-from .client import SalesforceClient
+try:
+    from .client import SalesforceClient
+except ImportError:
+    from client import SalesforceClient
+
 
 
 def main():

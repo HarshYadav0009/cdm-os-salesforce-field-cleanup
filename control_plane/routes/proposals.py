@@ -202,3 +202,120 @@ def get_pending_approvals(
     )
 
     return proposals
+
+
+# ── POST /proposals/{id}/execute — Trigger tool execution ─────
+from fastapi import BackgroundTasks
+import httpx
+from control_plane.config import settings
+
+@router.post("/{proposal_id}/execute", response_model=ProposalResponse)
+def execute_proposal(
+    proposal_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """
+    Execute an approved proposal via the Tool Gateway.
+    Only proposals in HUMAN_APPROVED or POLICY_APPROVED can be executed.
+    """
+    proposal = db.query(Proposal).filter(Proposal.id == proposal_id).first()
+    if not proposal:
+        raise HTTPException(404, "Proposal not found")
+
+    allowed_statuses = {
+        ProposalStatus.HUMAN_APPROVED,
+        ProposalStatus.POLICY_APPROVED,
+    }
+    if proposal.status not in allowed_statuses:
+        raise HTTPException(
+            409,
+            f"Proposal is in '{proposal.status.value}' state — "
+            f"only HUMAN_APPROVED or POLICY_APPROVED proposals can be executed",
+        )
+
+    # Transition to EXECUTING
+    proposal.status = ProposalStatus.EXECUTING
+    record_event(db, "EXECUTION_STARTED", "system", {
+        "tool_id": proposal.tool_id,
+        "input_payload": proposal.input_payload,
+    }, proposal_id=proposal.id)
+    db.commit()
+    db.refresh(proposal)
+
+    # Dispatch to Tool Gateway in background
+    background_tasks.add_task(
+        _run_tool_execution,
+        proposal_id=proposal.id,
+        tool_id=proposal.tool_id,
+        input_payload=proposal.input_payload,
+    )
+
+    logger.info(f"Proposal {proposal.id} dispatched for execution")
+    return proposal
+
+
+async def _run_tool_execution(
+    proposal_id: UUID,
+    tool_id: str,
+    input_payload: dict,
+):
+    """Background task: call Tool Gateway and update proposal status."""
+    from control_plane.database import SessionLocal
+
+    gateway_url = f"http://127.0.0.1:{settings.MCP_GATEWAY_PORT}"
+    timeout = float(settings.MCP_REQUEST_TIMEOUT_SEC)
+
+    endpoint_map = {
+        "salesforce_describe_object": "/tools/salesforce/describe",
+        "salesforce_query_field_usage": "/tools/salesforce/field-usage",
+        "salesforce_health_check": "/health",
+    }
+
+    endpoint = endpoint_map.get(tool_id)
+    if not endpoint:
+        with SessionLocal() as db:
+            proposal = db.query(Proposal).filter(Proposal.id == proposal_id).first()
+            if proposal:
+                proposal.status = ProposalStatus.FAILED
+                proposal.error_message = f"No gateway endpoint mapped for tool: {tool_id}"
+                proposal.executed_at = datetime.now(timezone.utc)
+                record_event(db, "EXECUTION_FAILED", "system", {
+                    "error": proposal.error_message,
+                }, proposal_id=proposal.id)
+                db.commit()
+        return
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{gateway_url}{endpoint}",
+                json=input_payload,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+        with SessionLocal() as db:
+            proposal = db.query(Proposal).filter(Proposal.id == proposal_id).first()
+            if proposal:
+                proposal.status = ProposalStatus.COMPLETED
+                proposal.execution_result = result
+                proposal.executed_at = datetime.now(timezone.utc)
+                record_event(db, "TOOL_EXECUTED", "system", {
+                    "tool_id": tool_id,
+                    "result_summary": str(result)[:500],
+                }, proposal_id=proposal.id)
+                db.commit()
+
+    except Exception as exc:
+        with SessionLocal() as db:
+            proposal = db.query(Proposal).filter(Proposal.id == proposal_id).first()
+            if proposal:
+                proposal.status = ProposalStatus.FAILED
+                proposal.error_message = str(exc)
+                proposal.executed_at = datetime.now(timezone.utc)
+                record_event(db, "EXECUTION_FAILED", "system", {
+                    "error": str(exc),
+                }, proposal_id=proposal.id)
+                db.commit()
+

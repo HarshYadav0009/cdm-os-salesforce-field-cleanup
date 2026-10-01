@@ -170,11 +170,39 @@ class PolicyEngine:
                         f"Rule {rule.rule_id}: deny condition matched — {condition}"
                     )
 
-            # Check rate limits
+            # Check rate limits against recent DB operations
             if rule.max_operations is not None:
-                # In a real implementation, we'd query the DB for recent operation count
-                # For now, this is a placeholder that always passes
-                pass
+                try:
+                    from control_plane.database import SessionLocal
+                    from control_plane.models import Proposal, ProposalStatus
+                    from datetime import datetime, timezone, timedelta
+
+                    with SessionLocal() as rate_db:
+                        window_start = datetime.now(timezone.utc) - timedelta(hours=1)
+                        recent_count = (
+                            rate_db.query(Proposal)
+                            .filter(
+                                Proposal.tool_id == tool_id,
+                                Proposal.status.in_([
+                                    ProposalStatus.COMPLETED,
+                                    ProposalStatus.EXECUTING,
+                                    ProposalStatus.POLICY_APPROVED,
+                                    ProposalStatus.HUMAN_APPROVED,
+                                ]),
+                                Proposal.created_at >= window_start,
+                            )
+                            .count()
+                        )
+
+                    if recent_count >= rule.max_operations:
+                        decision.allowed = False
+                        decision.denial_reasons.append(
+                            f"Rule {rule.rule_id}: rate limit exceeded — "
+                            f"{recent_count}/{rule.max_operations} operations in last hour"
+                        )
+                except Exception as exc:
+                    logger.warning(f"Failed to check rate limit for rule {rule.rule_id}: {exc}")
+
 
             # Check HITL requirement
             if rule.requires_hitl:

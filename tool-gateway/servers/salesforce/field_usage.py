@@ -32,9 +32,12 @@ class SalesforceFieldUsageService:
 
         result = self.client.query(query)
 
-        return int(
-            result.get("totalSize", 0)
-        )
+        records = result.get("records", [])
+        if not records:
+            return 0
+
+        return int(records[0].get("total", 0))
+
 
     # ============================================================
     # POPULATED FIELD COUNT
