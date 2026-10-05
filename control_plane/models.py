@@ -97,7 +97,7 @@ class Agent(Base):
     model_primary = Column(String(128), nullable=False, default="anthropic/claude-3-5-sonnet-20241022")
     model_fallback = Column(String(128))
     status = Column(
-        Enum(AgentStatus, name="agent_status", create_type=False),
+        Enum(AgentStatus, name="agent_status", values_callable=lambda obj: [e.value for e in obj], create_type=False),
         nullable=False,
         default=AgentStatus.IDLE,
     )
@@ -121,7 +121,7 @@ class ToolDefinition(Base):
     name = Column(String(256), nullable=False)
     description = Column(Text)
     tier = Column(
-        Enum(ToolTier, name="tool_tier", create_type=False),
+        Enum(ToolTier, name="tool_tier", values_callable=lambda obj: [e.value for e in obj], create_type=False),
         nullable=False,
         default=ToolTier.TIER_1,
     )
@@ -141,11 +141,11 @@ class Proposal(Base):
     agent_id = Column(String(128), ForeignKey("agents.agent_id"), nullable=False)
     tool_id = Column(String(128), ForeignKey("tool_definitions.tool_id"), nullable=False)
     status = Column(
-        Enum(ProposalStatus, name="proposal_status", create_type=False),
+        Enum(ProposalStatus, name="proposal_status", values_callable=lambda obj: [e.value for e in obj], create_type=False),
         nullable=False,
         default=ProposalStatus.PROPOSED,
     )
-    tier = Column(Enum(ToolTier, name="tool_tier", create_type=False), nullable=False)
+    tier = Column(Enum(ToolTier, name="tool_tier", values_callable=lambda obj: [e.value for e in obj], create_type=False), nullable=False)
     input_payload = Column(JSONB, nullable=False)
     policy_result = Column(JSONB)
     human_decision = Column(JSONB)
@@ -192,7 +192,7 @@ class PolicyRule(Base):
     rule_id = Column(String(128), unique=True, nullable=False, index=True)
     policy_file = Column(String(256), nullable=False)
     action = Column(String(128), nullable=False)
-    tier = Column(Enum(ToolTier, name="tool_tier", create_type=False))
+    tier = Column(Enum(ToolTier, name="tool_tier", values_callable=lambda obj: [e.value for e in obj], create_type=False))
     conditions = Column(JSONB, nullable=False)
     enforcement = Column(JSONB)
     is_active = Column(Boolean, nullable=False, default=True)

@@ -34,6 +34,7 @@ router = APIRouter(prefix="/proposals", tags=["Proposals"])
 
 
 # ── POST /proposals — Agent submits a new proposal ────────────
+@router.post("", response_model=ProposalResponse, status_code=201, include_in_schema=False)
 @router.post("/", response_model=ProposalResponse, status_code=201)
 def create_proposal(body: ProposalCreate, db: Session = Depends(get_db)):
     """
@@ -102,6 +103,7 @@ def create_proposal(body: ProposalCreate, db: Session = Depends(get_db)):
 
 
 # ── GET /proposals — List proposals with optional filters ─────
+@router.get("", response_model=list[ProposalResponse], include_in_schema=False)
 @router.get("/", response_model=list[ProposalResponse])
 def list_proposals(
     status: Optional[ProposalStatusEnum] = Query(None, description="Filter by status"),
@@ -180,10 +182,10 @@ def human_decide(proposal_id: UUID, body: HumanDecision, db: Session = Depends(g
 
 
 # ── GET /proposals/pending — Shortcut for Governance UI ───────
-@router.get(
-    "/queue/pending",
-    response_model=list[ProposalResponse]
-)
+@router.get("/queue/pending", response_model=list[ProposalResponse])
+@router.get("/queue/pending/", response_model=list[ProposalResponse], include_in_schema=False)
+@router.get("/pending", response_model=list[ProposalResponse], include_in_schema=False)
+@router.get("/pending/", response_model=list[ProposalResponse], include_in_schema=False)
 def get_pending_approvals(
     db: Session = Depends(get_db)
 ):

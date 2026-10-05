@@ -19,6 +19,7 @@ logger = logging.getLogger("cdm.api.agents")
 router = APIRouter(prefix="/agents", tags=["Agents"])
 
 
+@router.post("", response_model=AgentResponse, status_code=201, include_in_schema=False)
 @router.post("/", response_model=AgentResponse, status_code=201)
 def register_agent(body: AgentCreate, db: Session = Depends(get_db)):
     """Register a new agent in the Control Plane."""
@@ -43,6 +44,7 @@ def register_agent(body: AgentCreate, db: Session = Depends(get_db)):
     return agent
 
 
+@router.get("", response_model=list[AgentResponse], include_in_schema=False)
 @router.get("/", response_model=list[AgentResponse])
 def list_agents(db: Session = Depends(get_db)):
     """List all registered agents."""

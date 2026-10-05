@@ -14,7 +14,8 @@ from control_plane.schemas import ToolResponse
 router = APIRouter(prefix="/tools", tags=["Tools"])
 
 
+@router.get("", response_model=list[ToolResponse], include_in_schema=False)
 @router.get("/", response_model=list[ToolResponse])
 def list_tools(db: Session = Depends(get_db)):
     """List all registered tools with their tier classifications."""
-    return db.query(ToolDefinition).order_by(ToolDefinition.tier).all()
+    return db.query(ToolDefinition).order_by(ToolDefinition.created_at.desc()).all()

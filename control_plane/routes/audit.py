@@ -18,6 +18,7 @@ from control_plane.schemas import AuditLogResponse
 router = APIRouter(prefix="/audit", tags=["Audit"])
 
 
+@router.get("", response_model=list[AuditLogResponse], include_in_schema=False)
 @router.get("/", response_model=list[AuditLogResponse])
 def list_audit_logs(
     event_type: Optional[str] = Query(None),

@@ -48,6 +48,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
     ports:
       - "8000:8000"
     volumes:
@@ -68,6 +72,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - PYTHONPATH=/app:/app/tool-gateway
     ports:
       - "8080:8080"
     volumes:

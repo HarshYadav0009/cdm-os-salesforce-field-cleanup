@@ -20,6 +20,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from control_plane.config import settings
+from control_plane.database import Base, engine, SessionLocal
+from control_plane.models import Agent, ToolDefinition, ToolTier
 from control_plane.policy_engine import policy_engine
 from control_plane.routes import (
     proposals_router,
@@ -41,13 +43,52 @@ logger = logging.getLogger("cdm.main")
 # ── Lifespan (startup / shutdown hooks) ───────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: load policies. Shutdown: cleanup."""
+    """Startup: initialize DB tables, seed default tools/agents, load policies."""
     logger.info("=" * 60)
     logger.info("CDM-OS Control Plane starting up")
     logger.info(f"  Environment : {settings.CDM_ENV}")
     logger.info(f"  Policy mode : {settings.POLICY_MODE}")
     logger.info(f"  Database    : {settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}")
     logger.info("=" * 60)
+
+    # Initialize Database Tables
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables initialized successfully.")
+    except Exception as e:
+        logger.warning(f"Database table initialization notice: {e}")
+
+    # Seed Default Agent & Tools if missing
+    try:
+        with SessionLocal() as db:
+            if not db.query(Agent).filter(Agent.agent_id == "field-cleanup-agent").first():
+                agent = Agent(
+                    agent_id="field-cleanup-agent",
+                    name="Salesforce Field Cleanup Agent",
+                    version="1.0.0",
+                    model_primary="gemini-3.6-flash",
+                )
+                db.add(agent)
+
+            tools_to_seed = [
+                ("salesforce_full_field_assessment", "Full Field Safety Assessment", "Run metadata, population, and reference scan report", ToolTier.TIER_1),
+                ("salesforce_describe_object", "Describe Object Metadata", "Retrieve object field definitions", ToolTier.TIER_1),
+                ("salesforce_query_field_usage", "Query Field Record Population", "Calculate record population %", ToolTier.TIER_2),
+                ("salesforce_delete_field", "Delete Custom Field", "Permanently delete custom field", ToolTier.TIER_3),
+            ]
+            for tool_id, name, desc, tier in tools_to_seed:
+                if not db.query(ToolDefinition).filter(ToolDefinition.tool_id == tool_id).first():
+                    db.add(ToolDefinition(
+                        tool_id=tool_id,
+                        name=name,
+                        description=desc,
+                        tier=tier,
+                        mcp_server="salesforce-mcp",
+                    ))
+            db.commit()
+            logger.info("Default agent and tool definitions seeded successfully.")
+    except Exception as e:
+        logger.warning(f"Seed step notice: {e}")
 
     # Load policy definitions from YAML files
     rule_count = policy_engine.load_policies()
