@@ -1,178 +1,168 @@
+from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .service import ToolGatewayService
 
-
 app = FastAPI(
     title="CDM-OS Tool Gateway",
-    version="1.0.0"
+    version="1.0.0",
+    description="Governed Model Context Protocol (MCP) Tool Gateway for Salesforce and External Systems"
 )
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-class FieldUsageRequest(BaseModel):
-
-    object_name: str
-    field_name: str
-
-
-class FieldAssessmentRequest(BaseModel):
-
-    object_name: str
-    field_name: str
-
 
 gateway = ToolGatewayService()
 
 
+# ============================================================
+# DTO REQUEST MODELS
+# ============================================================
+
+class ObjectRequest(BaseModel):
+    object_name: str = Field(..., description="Salesforce SObject API name (e.g. Account)")
+
+
+class FieldRequest(BaseModel):
+    object_name: str = Field(..., description="Salesforce SObject API name")
+    field_name: str = Field(..., description="Salesforce Field API name")
+
+
+class DeprecateRequest(BaseModel):
+    object_name: str
+    field_name: str
+    reason: Optional[str] = None
+
+
+class RollbackRequest(BaseModel):
+    backup_id: str
+
+
+class BulkScanRequest(BaseModel):
+    object_names: Optional[List[str]] = None
+    threshold_percentage: Optional[float] = 0.0
+
+
+class GenericExecuteRequest(BaseModel):
+    tool_name: str
+    arguments: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ============================================================
+# API ENDPOINTS
+# ============================================================
+
 @app.get("/health")
 async def health():
-
     try:
-
         result = await gateway.health_check()
-
         return {
             "status": "healthy",
             "gateway": "tool-gateway",
             "salesforce": result
         }
-
     except Exception as exc:
-
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc)
-        )
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/tools")
 async def tools():
+    return {
+        "tools": await gateway.list_tools()
+    }
 
+
+@app.post("/tools/salesforce/describe-global")
+async def describe_global():
     try:
-        tool_list = await gateway.salesforce.list_tools()
-        return {
-            "tools": [
-                {
-                    "name": t.name,
-                    "description": t.description,
-                }
-                for t in tool_list
-            ]
-        }
+        return await gateway.describe_global()
     except Exception as exc:
-        return {
-            "tools": [
-                {"name": "salesforce_describe_object", "description": "Read Salesforce object metadata"},
-                {"name": "salesforce_query_field_usage", "description": "Analyze Salesforce field population"},
-                {"name": "salesforce_scan_apex_references", "description": "Scan metadata and code references for a field"},
-                {"name": "salesforce_full_field_assessment", "description": "Run 3-phase safety assessment report"},
-                {"name": "salesforce_health_check", "description": "Verify Salesforce connectivity"},
-            ],
-            "source": "static_fallback",
-            "error": str(exc),
-        }
-
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/tools/salesforce/describe")
-async def describe_object(
-    request: dict
-):
-
-    object_name = request.get(
-        "object_name"
-    )
-
-    if not object_name:
-
-        raise HTTPException(
-            status_code=400,
-            detail="object_name is required"
-        )
-
+async def describe_object(request: ObjectRequest):
     try:
-
-        return await gateway.describe_object(
-            object_name
-        )
-
+        return await gateway.describe_object(request.object_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc)
-        )
+
+@app.post("/tools/salesforce/field-metadata")
+async def field_metadata(request: FieldRequest):
+    try:
+        return await gateway.get_field_metadata(request.object_name, request.field_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/tools/salesforce/field-usage")
-async def field_usage(
-    request: FieldUsageRequest
-):
-
+async def field_usage(request: FieldRequest):
     try:
-
-        return await gateway.query_field_usage(
-            request.object_name,
-            request.field_name
-        )
-
+        return await gateway.query_field_usage(request.object_name, request.field_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc)
-        )
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/tools/salesforce/scan-references")
-async def scan_references(
-    request: FieldAssessmentRequest
-):
-
+async def scan_references(request: FieldRequest):
     try:
-
-        return await gateway.scan_apex_references(
-            request.object_name,
-            request.field_name
-        )
-
+        return await gateway.scan_apex_references(request.object_name, request.field_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc)
-        )
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
-@app.post("/tools/salesforce/full-assessment")
-async def full_assessment(
-    request: FieldAssessmentRequest
-):
-
+@app.post("/tools/salesforce/backup")
+async def backup_field(request: FieldRequest):
     try:
-
-        return await gateway.full_field_assessment(
-            request.object_name,
-            request.field_name
-        )
-
+        return await gateway.backup_field_definition(request.object_name, request.field_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc)
-        )
+
+@app.post("/tools/salesforce/deprecate")
+async def deprecate_field(request: DeprecateRequest):
+    try:
+        return await gateway.deprecate_field(request.object_name, request.field_name, request.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/tools/salesforce/rollback")
+async def rollback_field(request: RollbackRequest):
+    try:
+        return await gateway.rollback_field(request.backup_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/tools/salesforce/bulk-scan")
+async def bulk_scan(request: BulkScanRequest):
+    try:
+        return await gateway.bulk_scan(request.object_names, request.threshold_percentage or 0.0)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/tools/execute")
+async def execute_tool(request: GenericExecuteRequest):
+    try:
+        return await gateway.execute_tool(request.tool_name, request.arguments)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
