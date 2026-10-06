@@ -1,0 +1,78 @@
+/* Apply to your table */
+.fieldTable {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+/* First column of every row (header + body)*/
+.fieldTable tr td:first-child {
+  padding-left: 15px;
+}
+
+/* Last column of every row (header + body) */
+.fieldTable tr td:last-child {
+  padding-right: 15px;
+} 
+
+.fieldTable tr td:nth-child(3){
+    padding-right:15;
+}
+
+.fieldTable tbody tr:hover{
+    background: #54626e;
+    cursor: pointer;
+}
+.fieldTable tbody tr {
+    border-bottom: 1 solid slategray;
+}
+.fieldTable tbody tr:last-child{
+    border-bottom : none;
+}
+
+.fieldTable tbody tr td:last-child{
+    color:rgb(58, 144, 250);
+}
+
+
+
+
+/* ================================================================================== ApprovalQueueSummary.tsx */
+
+.approvalQueueTable tr{
+    border-top:1 solid slategray;
+}
+
+.approvalQueueTable tr td{
+    padding:8px;
+}
+
+.approvalQueueTable tr:first-child{
+    padding-left:120px;
+}
+
+.rejectBtn {
+    color:rgb(223, 33, 15);
+    background: rgba(250, 141, 141, 0.374);
+    padding:3px 6px;
+    border-radius: 15px;
+    cursor: pointer;
+}
+
+.approveBtn {
+    color:rgb(31, 172, 0);
+    background: rgba(146, 250, 141, 0.374);
+    padding:3px 6px;
+    border-radius: 15px;
+    cursor: pointer;
+}
+
+/* ================================================================================== RecentAuditActivity.tsx */
+
+
+.recentAuditActivity li{
+    border-top:1 solid slategray;
+    padding:8px;
+}
+.recentAuditActivity li:last-child{
+    border-bottom:1 solid slategray;
+}
