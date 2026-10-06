@@ -40,6 +40,8 @@ The backend does not currently register endpoints for dashboard summary, policy 
 `NEXT_PUBLIC_WS_URL` may be configured for a separate deployment that provides a WebSocket server. The bundled FastAPI backend itself does not expose a WebSocket route.
 
 ## Local development
+1. Open a terminal in the `field-cleanup` folder.
+2. Install dependencies. Run this only once, the first time you set up the project:
 
 ```bash
 npm install
