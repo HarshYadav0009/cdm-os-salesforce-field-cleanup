@@ -1,3 +1,5 @@
+import logging
+import os
 import sys
 from typing import Dict, Any, List, Optional
 from fastmcp import Client
@@ -19,6 +21,7 @@ class SalesforceMCPClient:
         return StdioTransport(
             command=sys.executable,
             args=["-m", "servers.salesforce.server"],
+            cwd=os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
         )
 
     async def _call_tool(

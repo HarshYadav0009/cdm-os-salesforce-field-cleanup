@@ -28,6 +28,7 @@ from control_plane.routes import (
     agents_router,
     tools_router,
     audit_router,
+    policies_router,
 )
 
 
@@ -74,6 +75,7 @@ async def lifespan(app: FastAPI):
                 ("salesforce_full_field_assessment", "Full Field Safety Assessment", "Run metadata, population, and reference scan report", ToolTier.TIER_1),
                 ("salesforce_describe_object", "Describe Object Metadata", "Retrieve object field definitions", ToolTier.TIER_1),
                 ("salesforce_query_field_usage", "Query Field Record Population", "Calculate record population %", ToolTier.TIER_2),
+                ("salesforce_deprecate_field", "Deprecate Custom Field", "Back up and deprecate a custom field; requires human approval", ToolTier.TIER_3),
                 ("salesforce_delete_field", "Delete Custom Field", "Permanently delete custom field", ToolTier.TIER_3),
             ]
             for tool_id, name, desc, tier in tools_to_seed:
@@ -129,6 +131,7 @@ app.include_router(proposals_router, prefix="/api/v1")
 app.include_router(agents_router, prefix="/api/v1")
 app.include_router(tools_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
+app.include_router(policies_router, prefix="/api/v1")
 
 
 # ── Health Check ──────────────────────────────────────────────
@@ -155,6 +158,7 @@ def root():
             "agents": "/api/v1/agents",
             "tools": "/api/v1/tools",
             "audit": "/api/v1/audit",
+            "policies": "/api/v1/policies",
             "health": "/health",
         },
     }

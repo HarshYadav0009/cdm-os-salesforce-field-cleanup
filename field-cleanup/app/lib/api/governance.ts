@@ -52,7 +52,27 @@ export type RegisterAgentPayload = {
   config_yaml: string;
 };
 
+export interface PolicyRule {
+  id: string;
+  action: string;
+  source_file: string;
+  tier: string | null;
+  conditions: Record<string, unknown>;
+  enforcement: Record<string, unknown>;
+}
+
+export interface PolicyConfiguration {
+  mode: string;
+  rule_count: number;
+  rules: PolicyRule[];
+}
+
 export const GovernanceAPI = {
+// ================================================================================================= Policies
+  getPolicies: async (): Promise<PolicyConfiguration> => {
+    return request<PolicyConfiguration>("/policies/");
+  },
+
 // ================================================================================================= Proposals
   getPendingProposals: async (): Promise<Proposal[]> => {
     return request<Proposal[]>("/proposals/");

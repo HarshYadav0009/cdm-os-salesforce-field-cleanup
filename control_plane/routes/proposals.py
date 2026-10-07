@@ -265,12 +265,13 @@ async def _run_tool_execution(
     """Background task: call Tool Gateway and update proposal status."""
     from control_plane.database import SessionLocal
 
-    gateway_url = f"http://127.0.0.1:{settings.MCP_GATEWAY_PORT}"
+    gateway_url = settings.MCP_GATEWAY_URL.rstrip("/")
     timeout = float(settings.MCP_REQUEST_TIMEOUT_SEC)
 
     endpoint_map = {
         "salesforce_describe_object": "/tools/salesforce/describe",
         "salesforce_query_field_usage": "/tools/salesforce/field-usage",
+        "salesforce_deprecate_field": "/tools/salesforce/deprecate",
         "salesforce_health_check": "/health",
     }
 
@@ -290,6 +291,16 @@ async def _run_tool_execution(
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
+            if tool_id == "salesforce_deprecate_field":
+                input_payload = {
+                    "object_name": input_payload.get(
+                        "object_name", input_payload.get("object_api_name", "")
+                    ),
+                    "field_name": input_payload.get(
+                        "field_name", input_payload.get("field_api_name", "")
+                    ),
+                    "reason": input_payload.get("reason"),
+                }
             response = await client.post(
                 f"{gateway_url}{endpoint}",
                 json=input_payload,
@@ -320,4 +331,3 @@ async def _run_tool_execution(
                     "error": str(exc),
                 }, proposal_id=proposal.id)
                 db.commit()
-

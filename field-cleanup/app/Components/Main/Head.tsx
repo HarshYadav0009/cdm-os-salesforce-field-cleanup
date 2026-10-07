@@ -5,7 +5,8 @@ import { useRealtime } from "@/app/lib/ws/RealtimeProvider";
 
 interface HeadProps {
   /** Shows the hamburger toggle on mobile/tablet (< lg) */
-  onOpenNav?: () => void;
+  onToggleNav: () => void;
+  navOpen: boolean;
   /** Full app title — abbreviates on mobile */
   title?: string;
   shortTitle?: string;
@@ -16,7 +17,8 @@ interface HeadProps {
 }
 
 export default function Head({
-  onOpenNav,
+  onToggleNav,
+  navOpen,
   title = "CDM-OS Guardian & Governance",
   shortTitle = "CDM-OS",
   userName = "Sumit",
@@ -31,8 +33,10 @@ export default function Head({
       {/* Mobile menu button */}
       <button
         type="button"
-        onClick={onOpenNav}
-        aria-label="Open navigation"
+        onClick={onToggleNav}
+        aria-label={navOpen ? "Close navigation" : "Open navigation"}
+        aria-expanded={navOpen}
+        aria-controls="main-navigation"
         className="shrink-0 rounded-md p-2 text-slate-200 transition-colors hover:bg-slate-800/60 lg:hidden"
       >
         <Menu className="h-5 w-5" />

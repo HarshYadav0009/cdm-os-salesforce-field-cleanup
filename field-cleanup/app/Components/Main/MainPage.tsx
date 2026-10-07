@@ -30,7 +30,8 @@ export default function MainPage() {
   return (
     <div className="flex h-dvh flex-col bg-[#111319] text-slate-100">
       <Head
-        onOpenNav={() => setMobileNavOpen(true)}
+        navOpen={mobileNavOpen}
+        onToggleNav={() => setMobileNavOpen((open) => !open)}
         notificationCount={3}
         userName="Sumit"
         onBellClick={() => setActivePage("ApprovalQueue")}

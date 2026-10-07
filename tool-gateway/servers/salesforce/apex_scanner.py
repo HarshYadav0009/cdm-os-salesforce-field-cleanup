@@ -74,22 +74,35 @@ class SalesforceApexScanner:
         field_name = validate_salesforce_identifier(field_name)
         pattern = re.compile(rf"\b{re.escape(field_name)}\b", re.IGNORECASE)
 
-        soql = "SELECT Id, DeveloperName, Description, Metadata FROM Flow"
+        soql = (
+            "SELECT Id, MasterLabel, Description, Status, VersionNumber "
+            "FROM Flow WHERE Status IN ('Active', 'Draft')"
+        )
         res = self.client.tooling_query(soql)
         matches = []
 
         for record in res.get("records", []):
-            dev_name = record.get("DeveloperName", "")
+            flow_id = record.get("Id")
+            flow_name = record.get("MasterLabel") or flow_id or "Unknown Flow"
             desc = record.get("Description", "") or ""
-            metadata_str = str(record.get("Metadata", ""))
+            metadata_str = ""
+            if flow_id:
+                # Salesforce only allows Metadata to be queried when the query
+                # returns a single Flow record.
+                metadata = self.client.tooling_query(
+                    f"SELECT Metadata FROM Flow WHERE Id = '{flow_id}' LIMIT 1"
+                ).get("records", [])
+                if metadata:
+                    metadata_str = str(metadata[0].get("Metadata", "") or "")
 
             if pattern.search(metadata_str) or pattern.search(desc):
                 matches.append({
                     "type": "Flow",
-                    "id": record.get("Id"),
-                    "name": dev_name,
+                    "id": flow_id,
+                    "name": flow_name,
                     "description": desc,
-                    "snippet": f"Referenced in flow metadata definition '{dev_name}'"
+                    "version": record.get("VersionNumber"),
+                    "snippet": f"Referenced in flow metadata definition '{flow_name}'"
                 })
 
         return matches
@@ -99,19 +112,32 @@ class SalesforceApexScanner:
         field_name = validate_salesforce_identifier(field_name)
         pattern = re.compile(rf"\b{re.escape(field_name)}\b", re.IGNORECASE)
 
-        soql = "SELECT Id, DeveloperName, Source FROM LightningComponentBundle"
+        soql = (
+            "SELECT Id, LightningComponentBundleId, "
+            "LightningComponentBundle.DeveloperName, FilePath, Source "
+            "FROM LightningComponentResource"
+        )
         res = self.client.tooling_query(soql)
         matches = []
 
         for record in res.get("records", []):
             source = record.get("Source", "") or ""
-            dev_name = record.get("DeveloperName", "")
+            bundle = record.get("LightningComponentBundle", {}) or {}
+            dev_name = (
+                bundle.get("DeveloperName")
+                or record.get("DeveloperName")
+                or record.get("FilePath")
+                or "Unknown Lightning component"
+            )
             if pattern.search(source):
                 matches.append({
                     "type": "LightningComponentBundle",
-                    "id": record.get("Id"),
+                    "id": record.get("LightningComponentBundleId") or record.get("Id"),
                     "name": dev_name,
-                    "snippet": f"Referenced in LWC bundle '{dev_name}'"
+                    "snippet": (
+                        f"Referenced in LWC bundle '{dev_name}'"
+                        + (f" ({record['FilePath']})" if record.get("FilePath") else "")
+                    )
                 })
 
         return matches
