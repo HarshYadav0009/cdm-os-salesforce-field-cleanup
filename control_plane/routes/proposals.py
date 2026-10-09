@@ -56,6 +56,15 @@ def create_proposal(body: ProposalCreate, db: Session = Depends(get_db)):
     if not tool:
         raise HTTPException(404, f"Tool '{body.tool_id}' not registered")
 
+    if (
+        body.tool_id == "salesforce_delete_field"
+        and body.input_payload.get("confirm_delete") is not True
+    ):
+        raise HTTPException(
+            400,
+            "Explicit confirmation (confirm_delete=true) is required for field deletion.",
+        )
+
     # ── Run Policy Engine ─────────────────────────────────────
     decision = policy_engine.evaluate(
         tool_id=body.tool_id,
@@ -271,7 +280,10 @@ async def _run_tool_execution(
     endpoint_map = {
         "salesforce_describe_object": "/tools/salesforce/describe",
         "salesforce_query_field_usage": "/tools/salesforce/field-usage",
+        "salesforce_scan_apex_references": "/tools/salesforce/scan-references",
         "salesforce_deprecate_field": "/tools/salesforce/deprecate",
+        "salesforce_backup_field_def": "/tools/salesforce/backup",
+        "salesforce_delete_field": "/tools/salesforce/delete",
         "salesforce_health_check": "/health",
     }
 
@@ -291,7 +303,11 @@ async def _run_tool_execution(
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            if tool_id == "salesforce_deprecate_field":
+            if tool_id in {
+                "salesforce_deprecate_field",
+                "salesforce_backup_field_def",
+                "salesforce_delete_field",
+            }:
                 input_payload = {
                     "object_name": input_payload.get(
                         "object_name", input_payload.get("object_api_name", "")
@@ -299,13 +315,27 @@ async def _run_tool_execution(
                     "field_name": input_payload.get(
                         "field_name", input_payload.get("field_api_name", "")
                     ),
-                    "reason": input_payload.get("reason"),
+                    **(
+                        {"confirm_delete": input_payload.get("confirm_delete") is True}
+                        if tool_id == "salesforce_delete_field"
+                        else {}
+                    ),
+                    **(
+                        {"reason": input_payload.get("reason")}
+                        if tool_id
+                        in {"salesforce_deprecate_field", "salesforce_delete_field"}
+                        else {}
+                    ),
                 }
             response = await client.post(
                 f"{gateway_url}{endpoint}",
                 json=input_payload,
             )
-            response.raise_for_status()
+            if not response.is_success:
+                detail = response.text.strip() or response.reason_phrase
+                raise RuntimeError(
+                    f"Tool Gateway returned HTTP {response.status_code}: {detail[:1000]}"
+                )
             result = response.json()
 
         with SessionLocal() as db:

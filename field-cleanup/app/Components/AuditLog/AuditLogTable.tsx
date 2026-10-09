@@ -31,7 +31,7 @@ export default function AuditLogTable({
         <table className="w-full min-w-[900px] table-fixed border-collapse text-left">
           <thead className="bg-slate-700">
             <tr>
-              <Th width="9%" onClick={onToggleSort}>
+              <Th width="14%" onClick={onToggleSort}>
                 <span className="flex items-center gap-1 hover:text-white">
                   Timestamp
                   {sortAsc ? (
@@ -41,12 +41,11 @@ export default function AuditLogTable({
                   )}
                 </span>
               </Th>
-              <Th width="9%">Workflow ID</Th>
-              <Th width="9%">Actor</Th>
-              <Th width="20%">Action Type</Th>
-              <Th width="7%">Resource</Th>
-              <Th width="19%">Details</Th>
-              <Th width="11%">Risk Tier</Th>
+              <Th width="12%">Workflow ID</Th>
+              <Th width="12%">Actor</Th>
+              <Th width="24%">Action Type</Th>
+              <Th width="10%">Details</Th>
+              <Th width="12%">Risk Tier</Th>
               <Th width="16%">HMAC Status</Th>
             </tr>
           </thead>
@@ -60,24 +59,23 @@ export default function AuditLogTable({
                   log.isAlert ? "bg-[#382225]" : "hover:bg-slate-800/30",
                 ].join(" ")}
               >
-                <Cell>{log.timestamp}</Cell>
+                <Cell className="break-words [overflow-wrap:anywhere]">
+                  {log.timestamp}
+                </Cell>
                 <Cell break>
-                  <span className="break-all">{log.workflowId}</span>
+                  <span title={log.workflowId}>
+                    {log.workflowId.slice(0, 10)}
+                  </span>
                 </Cell>
                 <Cell break>{log.actor}</Cell>
                 <Cell className="whitespace-pre-wrap leading-snug break-words">
                   {log.actionType}
                 </Cell>
-                <Cell break>{log.resource}</Cell>
                 <Cell>
-                  {log.detailsText && (
-                    <div className="mb-1 whitespace-pre-wrap break-all font-mono text-[10px] leading-snug text-slate-400">
-                      {log.detailsText}
-                    </div>
-                  )}
                   <button
+                    type="button"
                     onClick={() => onViewDetails(log)}
-                    className="mt-1 inline-block text-[11px] font-sans text-blue-400 hover:underline"
+                    className="inline-block text-[11px] font-sans text-blue-400 hover:underline"
                   >
                     View Details
                   </button>
@@ -86,7 +84,10 @@ export default function AuditLogTable({
                   <RiskBadge tier={log.riskTier} />
                 </Cell>
                 <Cell>
-                  <HmacBadge status={log.hmacStatus} signature={log.hmacSignature} />
+                  <HmacBadge
+                    status={log.hmacStatus}
+                    signature={log.hmacSignature}
+                  />
                 </Cell>
               </tr>
             ))}
@@ -111,15 +112,18 @@ export default function AuditLogTable({
                 </p>
                 <p className="text-xs text-slate-200">{log.timestamp}</p>
               </div>
-              <RiskBadge tier={log.riskTier} />
+              <div className="max-w-[45%] shrink-0">
+                <RiskBadge tier={log.riskTier} />
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <Field label="Workflow ID" value={log.workflowId} />
+            <div className="grid min-w-0 grid-cols-2 gap-2 text-[11px]">
+              <Field
+                label="Workflow ID"
+                value={log.workflowId.slice(0, 10)}
+                title={log.workflowId}
+              />
               <Field label="Actor" value={log.actor} />
-              {log.resource && (
-                <Field label="Resource" value={log.resource} />
-              )}
               <div className="col-span-2">
                 <p className="text-slate-400">Action</p>
                 <p className="whitespace-pre-wrap break-words text-slate-200">
@@ -128,14 +132,9 @@ export default function AuditLogTable({
               </div>
             </div>
 
-            {log.detailsText && (
-              <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-slate-800/40 p-2 font-mono text-[10px] leading-snug text-slate-400">
-                {log.detailsText}
-              </pre>
-            )}
-
             <div className="flex items-center justify-between gap-2 pt-1">
               <button
+                type="button"
                 onClick={() => onViewDetails(log)}
                 className="text-[11px] text-blue-400 hover:underline"
               >
@@ -188,6 +187,7 @@ function Cell({
     <td
       className={[
         "align-top px-2 py-3 text-[11px] text-slate-300",
+        "min-w-0 [overflow-wrap:anywhere]",
         shouldBreak ? "break-words" : "",
         className,
       ].join(" ")}
@@ -197,11 +197,21 @@ function Cell({
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({
+  label,
+  value,
+  title,
+}: {
+  label: string;
+  value: string;
+  title?: string;
+}) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-slate-400">{label}</p>
-      <p className="break-all text-slate-200">{value}</p>
+      <p title={title} className="break-all text-slate-200">
+        {value}
+      </p>
     </div>
   );
 }
@@ -211,7 +221,7 @@ function RiskBadge({ tier }: { tier: string }) {
   return (
     <span
       className={[
-        "inline-block rounded-full px-2 py-1 text-center text-[10px] font-medium leading-tight text-white",
+        "inline-block max-w-full break-words rounded-full px-2 py-1 text-center text-[10px] font-medium leading-tight text-white [overflow-wrap:anywhere]",
         isAuto ? "bg-[#4b9b6f]" : "bg-[#a46c3f]",
       ].join(" ")}
     >
@@ -232,7 +242,7 @@ function HmacBadge({
     <span
       title={signature ?? "The backend returned no HMAC signature"}
       className={[
-        "inline-flex items-center gap-1 rounded-full px-1.5 py-1 text-[10px] font-medium leading-tight text-white",
+        "inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-1 text-[10px] font-medium leading-tight text-white",
         present ? "bg-[#429861]" : "bg-[#b54848]",
       ].join(" ")}
     >
@@ -241,10 +251,8 @@ function HmacBadge({
       ) : (
         <AlertTriangle className="h-3 w-3 shrink-0" />
       )}
-      <span className="whitespace-nowrap">
-        {present
-          ? `Signature present · ${signature?.slice(0, 16)}…`
-          : "Signature missing"}
+      <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+        {present ? `Signature present · ${signature?.slice(0, 16)}…` : "Signature missing"}
       </span>
     </span>
   );

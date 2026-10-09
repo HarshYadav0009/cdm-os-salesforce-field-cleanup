@@ -74,6 +74,20 @@ class BackupFieldSchema(BaseModel):
         return validate_salesforce_identifier(v)
 
 
+class DeleteFieldSchema(BaseModel):
+    object_name: str = Field(..., description="Salesforce SObject API name")
+    field_name: str = Field(..., description="Unmanaged custom field API name")
+    confirm_delete: bool = Field(
+        ...,
+        description="Must be true; deletion requires prior human approval and explicit confirmation",
+    )
+    reason: Optional[str] = Field(None, description="Reason recorded with the deletion")
+
+    @field_validator("object_name", "field_name")
+    def check_identifier(cls, v):
+        return validate_salesforce_identifier(v)
+
+
 class RollbackFieldSchema(BaseModel):
     backup_id: str = Field(..., description="Unique backup identifier created during pre-modification snapshot")
 
@@ -97,6 +111,7 @@ TOOL_PAYLOAD_SCHEMAS = {
     "salesforce_scan_apex_references": ScanApexReferencesSchema,
     "salesforce_deprecate_field": DeprecateFieldSchema,
     "salesforce_backup_field_definition": BackupFieldSchema,
+    "salesforce_delete_field": DeleteFieldSchema,
     "salesforce_rollback_field": RollbackFieldSchema,
     "salesforce_bulk_scan": BulkScanSchema,
 }

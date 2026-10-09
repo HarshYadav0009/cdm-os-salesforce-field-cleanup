@@ -5,9 +5,11 @@ import {
   Activity,
   ArrowUpRight,
   Bot,
+  CircleAlert,
   Clock3,
   Loader2,
   Pause,
+  Play,
   Plus,
   Search,
   RefreshCw,
@@ -28,13 +30,6 @@ import type {
 } from "@/types/governance";
 
 type AgentStatus = ControlPlaneAgent["status"];
-const AGENT_STATUSES: AgentStatus[] = [
-  "IDLE",
-  "RUNNING",
-  "PAUSED",
-  "ERROR",
-  "TERMINATED",
-];
 type Agent = {
   id: string;
   name: string;
@@ -691,6 +686,7 @@ export function AgentsPage() {
   const [activeQuery, setActiveQuery] = useState("");
   const [searchError, setSearchError] = useState("");
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState<AgentStatus | null>(null);
 
   // Swap endpoint when a query is active
   const source = useApiResource<ControlPlaneAgent[] | ControlPlaneAgent>(
@@ -749,6 +745,7 @@ export function AgentsPage() {
   const updateAgentStatus = async (agent: Agent, nextStatus: AgentStatus) => {
     if (updatingAgentId) return;
     setUpdatingAgentId(agent.id);
+    setUpdatingStatus(nextStatus);
     try {
       await GovernanceAPI.updateAgentStatus(agent.agent_id, nextStatus);
       await source.reload();
@@ -765,6 +762,7 @@ export function AgentsPage() {
       );
     } finally {
       setUpdatingAgentId(null);
+      setUpdatingStatus(null);
     }
   };
   const isUpdating = selected?.id === updatingAgentId;
@@ -922,6 +920,7 @@ export function AgentsPage() {
               key={`${selected.id}:${selected.status}`}
               agent={selected}
               busy={isUpdating}
+              updatingStatus={isUpdating ? updatingStatus : null}
               onUpdate={(status) => void updateAgentStatus(selected, status)}
             />
           </Panel>
@@ -948,74 +947,152 @@ export function AgentsPage() {
 function AgentStatusControls({
   agent,
   busy,
+  updatingStatus,
   onUpdate,
 }: {
   agent: Agent;
   busy: boolean;
+  updatingStatus: AgentStatus | null;
   onUpdate: (status: AgentStatus) => void;
 }) {
-  const [nextStatus, setNextStatus] = useState<AgentStatus>(agent.status);
   const [confirmTermination, setConfirmTermination] = useState(false);
+  const actionsByStatus: Record<AgentStatus, {
+    status: AgentStatus;
+    label: string;
+    icon: typeof Play;
+    className: string;
+  }[]> = {
+    IDLE: [
+      {
+        status: "RUNNING",
+        label: "Start agent",
+        icon: Play,
+        className:
+          "border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:border-emerald-400/50 hover:bg-emerald-500/15",
+      },
+    ],
+    RUNNING: [
+      {
+        status: "PAUSED",
+        label: "Pause agent",
+        icon: Pause,
+        className:
+          "border-amber-500/30 bg-amber-500/10 text-amber-200 hover:border-amber-400/50 hover:bg-amber-500/15",
+      },
+      {
+        status: "IDLE",
+        label: "Set idle",
+        icon: Clock3,
+        className:
+          "border-slate-700 bg-slate-800/70 text-slate-200 hover:border-slate-500 hover:bg-slate-800",
+      },
+    ],
+    PAUSED: [
+      {
+        status: "RUNNING",
+        label: "Resume agent",
+        icon: Play,
+        className:
+          "border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:border-emerald-400/50 hover:bg-emerald-500/15",
+      },
+      {
+        status: "IDLE",
+        label: "Set idle",
+        icon: Clock3,
+        className:
+          "border-slate-700 bg-slate-800/70 text-slate-200 hover:border-slate-500 hover:bg-slate-800",
+      },
+    ],
+    ERROR: [
+      {
+        status: "RUNNING",
+        label: "Retry agent",
+        icon: Play,
+        className:
+          "border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:border-emerald-400/50 hover:bg-emerald-500/15",
+      },
+      {
+        status: "IDLE",
+        label: "Reset to idle",
+        icon: CircleAlert,
+        className:
+          "border-slate-700 bg-slate-800/70 text-slate-200 hover:border-slate-500 hover:bg-slate-800",
+      },
+    ],
+    TERMINATED: [
+      {
+        status: "IDLE",
+        label: "Reactivate agent",
+        icon: Play,
+        className:
+          "border-blue-500/30 bg-blue-500/10 text-blue-200 hover:border-blue-400/50 hover:bg-blue-500/15",
+      },
+    ],
+  };
+  const statusActions = actionsByStatus[agent.status];
 
   return (
     <div className="mt-5 space-y-4 border-t border-slate-800 pt-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="min-w-[180px] flex-1">
-          <span className="mb-1 block text-xs font-medium text-slate-300">
-            Set agent status
-          </span>
-          <select
-            value={nextStatus}
-            disabled={busy}
-            onChange={(event) => {
-              const status = AGENT_STATUSES.find(
-                (candidate) => candidate === event.target.value,
+      <div>
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold text-slate-200">
+            Agent controls
+          </h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Available actions for the current status.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {statusActions.map(
+            ({ status, label, icon: Icon, className }) => {
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onUpdate(status)}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-55 ${className}`}
+                >
+                  {updatingStatus === status ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Icon className="h-3.5 w-3.5" />
+                  )}
+                  {label}
+                </button>
               );
-              if (status) setNextStatus(status);
-            }}
-            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
-          >
-            {AGENT_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          disabled={busy || nextStatus === agent.status}
-          onClick={() => onUpdate(nextStatus)}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500/15 px-3.5 py-2.5 text-xs font-semibold text-blue-200 hover:bg-blue-500/25 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {busy ? "Updating…" : "Update status"}
-        </button>
+            },
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={busy || agent.status === "PAUSED" || agent.status === "TERMINATED"}
-          onClick={() => onUpdate("PAUSED")}
-          className="inline-flex items-center gap-2 rounded-lg bg-amber-500/15 px-3.5 py-2.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Pause className="h-3.5 w-3.5" />
-          Stop agent (pause)
-        </button>
-        <button
-          type="button"
-          disabled={busy || agent.status === "TERMINATED"}
-          onClick={() => setConfirmTermination(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-rose-500/15 px-3.5 py-2.5 text-xs font-semibold text-rose-200 hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <X className="h-3.5 w-3.5" />
-          Terminate agent
-        </button>
-      </div>
+      {agent.status !== "TERMINATED" && (
+        <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-rose-200">
+                Destructive control-plane action
+              </p>
+              <p className="mt-1 text-[11px] leading-5 text-slate-400">
+                Termination changes the recorded status; it does not directly
+                stop an external runtime.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setConfirmTermination(true)}
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-semibold text-rose-200 transition-colors hover:border-rose-400/50 hover:bg-rose-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <X className="h-3.5 w-3.5" />
+              Terminate agent
+            </button>
+          </div>
+        </div>
+      )}
       <p className="text-xs leading-5 text-slate-500">
-        These actions update the control-plane status. Stopping a running
-        process requires the agent runtime to observe and enforce that status.
+        Status changes are applied immediately. The agent runtime must observe
+        and enforce the updated status for it to affect a running process.
       </p>
 
       {confirmTermination && (
@@ -1059,7 +1136,9 @@ function AgentStatusControls({
                 }}
                 className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-500 disabled:opacity-50"
               >
-                {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {updatingStatus === "TERMINATED" && (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                )}
                 Confirm termination
               </button>
             </div>

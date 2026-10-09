@@ -233,17 +233,40 @@ class SalesforceClient:
             })
         return {"sobjects": sobjects_summary}
 
+    def delete_custom_field(self, object_name: str, field_name: str) -> None:
+        """Delete a custom field using Salesforce Metadata API."""
+        if not self._mock_mode and self.sf:
+            self.sf.mdapi.CustomField.delete([f"{object_name}.{field_name}"])
+            return
+
+        object_data = self._mock_objects.get(object_name)
+        if object_data is None:
+            raise ValueError(f"SObject '{object_name}' not found in Salesforce org.")
+
+        fields = object_data.get("fields", [])
+        matching_field = next(
+            (field for field in fields if field.get("name", "").lower() == field_name.lower()),
+            None,
+        )
+        if matching_field is None:
+            raise ValueError(
+                f"Field '{field_name}' not found on object '{object_name}'."
+            )
+        if not matching_field.get("custom", False):
+            raise ValueError(f"Standard Salesforce field '{field_name}' cannot be deleted.")
+
+        fields.remove(matching_field)
+
     def update_field_description(self, object_name: str, field_name: str, new_description: str) -> bool:
         """Update field description (used for deprecation tagging)."""
         if not self._mock_mode and self.sf:
-            # Query custom field id in Tooling API
-            q = f"SELECT Id FROM CustomField WHERE TableEnumOrId = '{object_name}' AND DeveloperName = '{field_name.replace('__c', '')}'"
-            res = self.sf.restful(f"tooling/query/?q={q}")
-            if res.get("records"):
-                cf_id = res["records"][0]["Id"]
-                self.sf.restful(f"tooling/sobjects/CustomField/{cf_id}", method="PATCH", data={"Description": new_description})
-                return True
-            return False
+            full_name = f"{object_name}.{field_name}"
+            metadata = self.sf.mdapi.CustomField.read([full_name])
+            if not metadata:
+                return False
+            metadata.description = new_description
+            self.sf.mdapi.CustomField.update([metadata])
+            return True
 
         # In-memory mock update
         obj_data = self._mock_objects.get(object_name)
@@ -255,7 +278,12 @@ class SalesforceClient:
         return False
 
     def update_field_permissions(self, object_name: str, field_name: str, readable: bool, editable: bool) -> bool:
-        """Update Field-Level Security permissions."""
+        """Update mock Field-Level Security state; live updates are not implemented."""
+        if not self._mock_mode and self.sf:
+            raise NotImplementedError(
+                "Live Salesforce field-level security updates are not implemented."
+            )
+
         key = f"{object_name}.{field_name}"
         self._mock_fls_records[key] = {
             "readable": readable,

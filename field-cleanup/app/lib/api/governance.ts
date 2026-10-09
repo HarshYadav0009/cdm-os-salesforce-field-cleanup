@@ -67,6 +67,12 @@ export interface PolicyConfiguration {
   rules: PolicyRule[];
 }
 
+export interface CreateProposalPayload {
+  agent_id: string;
+  tool_id: string;
+  input_payload: Record<string, unknown>;
+}
+
 export const GovernanceAPI = {
 // ================================================================================================= Policies
   getPolicies: async (): Promise<PolicyConfiguration> => {
@@ -89,6 +95,13 @@ export const GovernanceAPI = {
 
   getProposal: async (id: string): Promise<Proposal> => {
     return request<Proposal>(`/proposals/${encodeURIComponent(id)}`);
+  },
+
+  createProposal: async (payload: CreateProposalPayload): Promise<Proposal> => {
+    return request<Proposal>("/proposals/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
 
   submitDecision: async (
@@ -116,28 +129,6 @@ export const GovernanceAPI = {
 // ================================================================================================= Audit Log
   getAuditLog: async (limit = 50): Promise<AuditLogEntry[]> => {
     return request<AuditLogEntry[]>(`/audit/?limit=${encodeURIComponent(String(limit))}`);
-  },
-
-  recordFieldAnalysis: async (payload: {
-    object_name: string;
-    field_name: string;
-    outcome: "SUCCEEDED" | "FAILED";
-    usage?: {
-      total_records: number;
-      populated_records: number;
-      usage_percentage: number;
-      zero_usage_candidate: boolean;
-    };
-    references?: {
-      reference_count: number;
-      summary: string;
-    };
-    error_message?: string;
-  }): Promise<AuditLogEntry> => {
-    return request<AuditLogEntry>("/audit/field-analysis", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
   },
 
 // ================================================================================================= Agents

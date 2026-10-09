@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Archive, Loader2, ShieldAlert, WandSparkles } from "lucide-react";
 import FieldSelectSection from "./FieldSelectSection";
 import DependentTable, { type Dependency } from "./DependentTable";
 import DetailSection, { type FieldDetail } from "./DeatailSection";
@@ -13,10 +14,116 @@ import {
   type SalesforceReferenceScan,
 } from "@/app/lib/api/salesforce";
 import GovernanceAPI from "@/app/lib/api/governance";
+import { useApiResource } from "@/app/lib/api/useApiResource";
+import { useToast } from "@/app/Components/Toast/useToast";
+import type { Proposal, ToolDefinition } from "@/types/governance";
 
 interface FieldAnalysis {
   usage: SalesforceFieldUsage;
   references: SalesforceReferenceScan;
+}
+
+const ANALYSIS_AGENT_ID = "field-cleanup-agent";
+const PROPOSAL_POLL_INTERVAL_MS = 500;
+const PROPOSAL_POLL_ATTEMPTS = 90;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isSalesforceFieldUsage(
+  value: unknown,
+): value is SalesforceFieldUsage {
+  return (
+    isRecord(value) &&
+    typeof value.object === "string" &&
+    typeof value.field === "string" &&
+    typeof value.total_records === "number" &&
+    typeof value.populated_records === "number" &&
+    typeof value.usage_percentage === "number" &&
+    typeof value.zero_usage_candidate === "boolean" &&
+    typeof value.recommendation_hint === "string"
+  );
+}
+
+function isSalesforceReferenceScan(
+  value: unknown,
+): value is SalesforceReferenceScan {
+  return (
+    isRecord(value) &&
+    typeof value.has_references === "boolean" &&
+    typeof value.reference_count === "number" &&
+    typeof value.summary === "string" &&
+    Array.isArray(value.all_references) &&
+    value.all_references.every((reference) => {
+      if (!isRecord(reference) || typeof reference.type !== "string") {
+        return false;
+      }
+      return (
+        (reference.id === undefined || typeof reference.id === "string") &&
+        (reference.name === undefined || typeof reference.name === "string") &&
+        (reference.line_number === undefined ||
+          typeof reference.line_number === "number") &&
+        (reference.snippet === undefined ||
+          typeof reference.snippet === "string") &&
+        (reference.description === undefined ||
+          typeof reference.description === "string")
+      );
+    })
+  );
+}
+
+function getUsageResult(proposal: Proposal): SalesforceFieldUsage {
+  const result = proposal.execution_result;
+  if (!isSalesforceFieldUsage(result)) {
+    throw new Error("The field-usage proposal returned an invalid result.");
+  }
+  return result;
+}
+
+function getReferenceResult(proposal: Proposal): SalesforceReferenceScan {
+  const result = proposal.execution_result;
+  if (!isSalesforceReferenceScan(result)) {
+    throw new Error("The reference-scan proposal returned an invalid result.");
+  }
+  return result;
+}
+
+async function executeAnalysisProposal(
+  toolId: string,
+  objectName: string,
+  fieldName: string,
+): Promise<Proposal> {
+  const proposal = await GovernanceAPI.createProposal({
+    agent_id: ANALYSIS_AGENT_ID,
+    tool_id: toolId,
+    input_payload: { object_name: objectName, field_name: fieldName },
+  });
+
+  if (proposal.status !== "POLICY_APPROVED") {
+    throw new Error(
+      `${toolId} proposal was not approved for automatic execution (${proposal.status}).`,
+    );
+  }
+
+  await GovernanceAPI.executeProposal(proposal.id);
+  for (let attempt = 0; attempt < PROPOSAL_POLL_ATTEMPTS; attempt += 1) {
+    await new Promise((resolve) =>
+      window.setTimeout(resolve, PROPOSAL_POLL_INTERVAL_MS),
+    );
+    const current = await GovernanceAPI.getProposal(proposal.id);
+    if (current.status === "COMPLETED") return current;
+    if (current.status === "FAILED") {
+      throw new Error(current.error_message || `${toolId} proposal execution failed.`);
+    }
+    if (current.status !== "EXECUTING") {
+      throw new Error(
+        `${toolId} proposal entered an unexpected state (${current.status}).`,
+      );
+    }
+  }
+
+  throw new Error(`${toolId} proposal did not finish before the wait timed out.`);
 }
 
 function toDependencies(references: SalesforceReferenceScan): Dependency[] {
@@ -54,6 +161,147 @@ export default function DependencyViewerPage() {
   const [analysis, setAnalysis] = useState<FieldAnalysis | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [proposalReason, setProposalReason] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [submittingToolId, setSubmittingToolId] = useState<string | null>(null);
+  const toolsSource = useApiResource<ToolDefinition[]>("/tools/", []);
+  const toast = useToast();
+  const proposalTools = [
+    {
+      toolId: "salesforce_backup_field_def",
+      label: "Propose metadata backup",
+      description: "Create a Tier 2 proposal to snapshot this field.",
+      icon: Archive,
+      tone: "border-blue-500/25 bg-blue-500/[0.06] text-blue-200 hover:bg-blue-500/10",
+    },
+    {
+      toolId: "salesforce_deprecate_field",
+      label: "Propose deprecation",
+      description: "Submit a controlled field deprecation proposal.",
+      icon: WandSparkles,
+      tone: "border-amber-500/25 bg-amber-500/[0.06] text-amber-200 hover:bg-amber-500/10",
+    },
+    {
+      toolId: "salesforce_delete_field",
+      label: "Request deletion review",
+      description: "Create a Tier 3 proposal for human review.",
+      icon: ShieldAlert,
+      tone: "border-rose-500/25 bg-rose-500/[0.06] text-rose-200 hover:bg-rose-500/10",
+    },
+  ] as const;
+
+  const submitFieldProposal = async (toolId: string, label: string) => {
+    if (!object || !field || submittingToolId) return;
+    if (toolId === "salesforce_delete_field" && !confirmDelete) {
+      toast.error(
+        "Confirm that you intend to permanently delete this custom field before submitting.",
+        "Deletion confirmation required",
+      );
+      return;
+    }
+    setSubmittingToolId(toolId);
+    let proposal: Proposal;
+    try {
+      proposal = await GovernanceAPI.createProposal({
+        agent_id: ANALYSIS_AGENT_ID,
+        tool_id: toolId,
+        input_payload: {
+          object_name: object,
+          field_name: field,
+          field_api_name: field,
+          ...(proposalReason.trim()
+            ? { reason: proposalReason.trim() }
+            : {}),
+          ...(toolId === "salesforce_delete_field"
+            ? { confirm_delete: true }
+            : {}),
+        },
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : `Unable to submit ${label.toLowerCase()}.`,
+        "Proposal submission failed",
+      );
+      setSubmittingToolId(null);
+      return;
+    }
+
+    setProposalReason("");
+    if (toolId === "salesforce_delete_field") setConfirmDelete(false);
+
+    if (proposal.status === "PENDING_HUMAN_APPROVAL") {
+      toast.info(
+        `${label} submitted for human review. Proposal ${proposal.id} is in the Approval Queue.`,
+        "Approval required",
+      );
+      setSubmittingToolId(null);
+      return;
+    }
+    if (proposal.status === "POLICY_DENIED") {
+      toast.error(
+        proposal.policy_result?.denial_reasons.join("; ") ||
+          `The policy engine denied ${label.toLowerCase()}.`,
+        "Proposal denied",
+      );
+      setSubmittingToolId(null);
+      return;
+    }
+    if (proposal.status !== "POLICY_APPROVED") {
+      toast.info(
+        `${label} proposal ${proposal.id} was created with status ${proposal.status}.`,
+        "Proposal created",
+      );
+      setSubmittingToolId(null);
+      return;
+    }
+
+    try {
+      await GovernanceAPI.executeProposal(proposal.id);
+      for (let attempt = 0; attempt < PROPOSAL_POLL_ATTEMPTS; attempt += 1) {
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, PROPOSAL_POLL_INTERVAL_MS),
+        );
+        const current = await GovernanceAPI.getProposal(proposal.id);
+        if (current.status === "COMPLETED") {
+          const executionStatus =
+            typeof current.execution_result?.status === "string"
+              ? ` (${current.execution_result.status})`
+              : "";
+          toast.success(
+            `${label} completed${executionStatus}. Proposal ID: ${proposal.id}`,
+            "Proposal executed",
+          );
+          if (typeof current.execution_result?.warning === "string") {
+            toast.info(current.execution_result.warning, "Deprecation note");
+          }
+          setSubmittingToolId(null);
+          return;
+        }
+        if (current.status === "FAILED") {
+          throw new Error(current.error_message || `${label} execution failed.`);
+        }
+        if (current.status !== "EXECUTING") {
+          throw new Error(
+            `Proposal entered an unexpected state (${current.status}).`,
+          );
+        }
+      }
+      throw new Error(
+        `Execution is still running. Check proposal ${proposal.id} for its final status.`,
+      );
+    } catch (error) {
+      toast.error(
+        `Proposal ${proposal.id} was created, but execution did not complete: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+        "Proposal execution failed",
+      );
+    } finally {
+      setSubmittingToolId(null);
+    }
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -151,54 +399,27 @@ export default function DependencyViewerPage() {
     setAnalysisLoading(true);
 
     try {
-      const [usage, references] = await Promise.all([
-        SalesforceAPI.fieldUsage(object, field),
-        SalesforceAPI.scanReferences(object, field),
+      const [usageProposal, referenceProposal] = await Promise.all([
+        executeAnalysisProposal(
+          "salesforce_query_field_usage",
+          object,
+          field,
+        ),
+        executeAnalysisProposal(
+          "salesforce_scan_apex_references",
+          object,
+          field,
+        ),
       ]);
+      const usage = getUsageResult(usageProposal);
+      const references = getReferenceResult(referenceProposal);
       setAnalysis({ usage, references });
-      try {
-        await GovernanceAPI.recordFieldAnalysis({
-          object_name: object,
-          field_name: field,
-          outcome: "SUCCEEDED",
-          usage: {
-            total_records: usage.total_records,
-            populated_records: usage.populated_records,
-            usage_percentage: usage.usage_percentage,
-            zero_usage_candidate: usage.zero_usage_candidate,
-          },
-          references: {
-            reference_count: references.reference_count,
-            summary: references.summary,
-          },
-        });
-      } catch (auditError) {
-        const message =
-          auditError instanceof Error
-            ? auditError.message
-            : "Unable to record the field analysis in the audit log.";
-        setAnalysisError(`Analysis completed, but its audit event could not be saved: ${message}`);
-      }
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : `Unable to analyze ${object}.${field}.`;
       setAnalysisError(message);
-      try {
-        await GovernanceAPI.recordFieldAnalysis({
-          object_name: object,
-          field_name: field,
-          outcome: "FAILED",
-          error_message: message,
-        });
-      } catch (auditError) {
-        const auditMessage =
-          auditError instanceof Error
-            ? auditError.message
-            : "Unable to record the failed analysis in the audit log.";
-        setAnalysisError(`${message} Audit event could not be saved: ${auditMessage}`);
-      }
     } finally {
       setAnalysisLoading(false);
     }
@@ -295,17 +516,129 @@ export default function DependencyViewerPage() {
               </div>
             )}
 
-            {analysisError && (
-              <p role="alert" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.06] p-4 text-sm text-rose-200">
-                {analysis
-                  ? "Analysis completed with an audit warning:"
-                  : "Analysis failed:"}{" "}
-                {analysisError}
-              </p>
-            )}
-
-            {analysis ? (
-              <DependentTable dependencies={dependencies} />
+            {analysis || analysisError ? (
+              <>
+                <DependentTable
+                  dependencies={dependencies}
+                  error={analysisError ?? undefined}
+                />
+                {analysis && (
+                  <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 sm:p-5">
+                  <div className="mb-4">
+                    <p className="text-sm font-semibold text-slate-100">
+                      Remediation proposals
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                      Submit an action for {object}.{field}. Policy-approved
+                      Tier 2 actions execute after proposal creation; Tier 3
+                      deletion requests wait for human approval.
+                    </p>
+                  </div>
+                  <label className="mb-4 block">
+                    <span className="mb-1.5 block text-xs font-medium text-slate-300">
+                      Reason for the proposed change
+                      <span className="ml-1 font-normal text-slate-500">
+                        (optional)
+                      </span>
+                    </span>
+                    <textarea
+                      value={proposalReason}
+                      onChange={(event) => setProposalReason(event.target.value)}
+                      maxLength={500}
+                      rows={2}
+                      disabled={submittingToolId !== null}
+                      placeholder="Add context for the reviewer…"
+                      className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 outline-none transition focus:border-blue-500 disabled:opacity-50"
+                    />
+                  </label>
+                  {toolsSource.data.some(
+                    (tool) => tool.tool_id === "salesforce_delete_field",
+                  ) && (
+                    <label className="mb-4 flex items-start gap-2.5 rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-3 text-xs text-rose-100">
+                      <input
+                        type="checkbox"
+                        checked={confirmDelete}
+                        onChange={(event) =>
+                          setConfirmDelete(event.target.checked)
+                        }
+                        disabled={submittingToolId !== null}
+                        className="mt-0.5 accent-rose-500"
+                      />
+                      <span>
+                        I understand that deletion is permanent and that the
+                        metadata backup does not restore the field or its data.
+                        The request will still require human approval.
+                      </span>
+                    </label>
+                  )}
+                  {toolsSource.error && (
+                    <p role="alert" className="mb-3 text-xs text-rose-300">
+                      Unable to load registered tool tiers: {toolsSource.error}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {proposalTools.map(({ toolId, label, description, icon: Icon, tone }) => {
+                      const tool = toolsSource.data.find(
+                        (registeredTool) => registeredTool.tool_id === toolId,
+                      );
+                      if (!tool) return null;
+                      return (
+                        <button
+                          key={toolId}
+                          type="button"
+                          disabled={
+                            submittingToolId !== null ||
+                            toolsSource.loading ||
+                            !fieldMetadata ||
+                            (toolId === "salesforce_deprecate_field" &&
+                              !fieldMetadata.custom) ||
+                            (toolId === "salesforce_delete_field" &&
+                              (!confirmDelete || !fieldMetadata.custom))
+                          }
+                          onClick={() => void submitFieldProposal(toolId, label)}
+                          title={description}
+                          className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50 ${tone}`}
+                        >
+                          {submittingToolId === toolId ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Icon className="h-3.5 w-3.5" />
+                          )}
+                          {label}
+                          <span className="rounded bg-black/20 px-1.5 py-0.5 text-[10px]">
+                            {tool.tier}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {fieldMetadata && !fieldMetadata.custom && (
+                    <p className="mt-3 text-xs leading-5 text-amber-200/80">
+                      Deprecation is available only for custom fields. Select
+                      a custom field to submit this proposal.
+                    </p>
+                  )}
+                  {toolsSource.data.some(
+                    (tool) => tool.tool_id === "salesforce_delete_field",
+                  ) && (
+                    <p className="mt-3 text-xs leading-5 text-amber-200/80">
+                      Deletion is limited to unmanaged custom fields. It creates
+                      a metadata backup first, but does not archive existing
+                      records or automatically restore the deleted field.
+                    </p>
+                  )}
+                  {!toolsSource.loading && proposalTools.every(
+                    ({ toolId }) =>
+                      !toolsSource.data.some((tool) => tool.tool_id === toolId),
+                  ) && (
+                    <p className="mt-3 text-xs text-slate-500">
+                      No Tier 2 or Tier 3 field-remediation tools are registered
+                      by the control plane.
+                    </p>
+                  )}
+                  </section>
+                )}
+              </>
             ) : (
               <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 px-5 py-10 text-center">
                 {analysisLoading ? (

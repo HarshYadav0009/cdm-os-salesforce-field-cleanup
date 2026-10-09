@@ -13,11 +13,13 @@ export interface Dependency {
 
 interface DependentTableProps {
   dependencies: Dependency[];
+  error?: string;
   onRowClick?: (dep: Dependency) => void;
 }
 
 export default function DependentTable({
   dependencies,
+  error,
   onRowClick,
 }: DependentTableProps) {
   const [typeFilter, setTypeFilter] = useState("All types");
@@ -99,7 +101,23 @@ export default function DependentTable({
         )}
       </header>
 
-      {filteredDependencies.length === 0 ? (
+      {error ? (
+        <div
+          role="alert"
+          className="flex flex-col items-center px-5 py-12 text-center"
+        >
+          <span className="mb-3 rounded-2xl border border-rose-400/20 bg-rose-500/[0.06] p-3 text-rose-300">
+            <AlertCircle className="h-5 w-5" />
+          </span>
+          <h3 className="text-sm font-medium text-rose-100">
+            Could not analyze dependencies
+          </h3>
+          <p className="mt-1 max-w-lg break-words text-xs leading-5 text-slate-400">
+            The reference scan for the selected field did not complete. {error}
+            {" "}Check the Salesforce connection and permissions, then try again.
+          </p>
+        </div>
+      ) : filteredDependencies.length === 0 ? (
         <div className="flex flex-col items-center px-5 py-12 text-center">
           <span className="mb-3 rounded-2xl border border-emerald-400/15 bg-emerald-500/5 p-3 text-emerald-300">
             <AlertCircle className="h-5 w-5" />

@@ -98,6 +98,23 @@ class SalesforceMCPClient:
             {"object_name": object_name, "field_name": field_name, "reason": reason}
         )
 
+    async def delete_field(
+        self,
+        object_name: str,
+        field_name: str,
+        confirm_delete: bool,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return await self._call_tool(
+            "salesforce_delete_field",
+            {
+                "object_name": object_name,
+                "field_name": field_name,
+                "confirm_delete": confirm_delete,
+                "reason": reason,
+            },
+        )
+
     async def rollback_field(self, backup_id: str) -> Dict[str, Any]:
         return await self._call_tool("salesforce_rollback_field", {"backup_id": backup_id})
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, ChevronDown, Search } from "lucide-react";
+import { Calendar, Filter, Search } from "lucide-react";
 import AuditLogTable from "./AuditLogTable";
 import AuditFooterInfo from "./AuditFooterInfo";
 import type { AuditInfoCard, AuditLog } from "./types";
@@ -56,13 +56,23 @@ export default function AuditHeadSection({
 
       {/* Controls — stack on mobile, 3-up on md+ */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:mb-6 md:grid-cols-3">
-        <InputWithIcon
-          value={dateRange}
-          onChange={onDateRangeChange}
-          placeholder="Timestamp Range (e.g., Last 7 Days)"
-          icon={<Calendar className="h-4 w-4 text-slate-400" />}
-          ariaLabel="Timestamp range"
-        />
+        <label className="relative">
+          <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <select
+            value={dateRange}
+            onChange={(event) => onDateRangeChange(event.target.value)}
+            aria-label="Timestamp range"
+            className="w-full appearance-none rounded-lg border border-slate-700/60 bg-[#22252e] py-2 pl-9 pr-3 text-[13px] text-slate-200 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">All dates</option>
+            <option value="1h">Last hour</option>
+            <option value="6h">Last 6 hours</option>
+            <option value="24h">Last 24 hours</option>
+            <option value="today">Today</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+          </select>
+        </label>
 
         <InputWithIcon
           value={search}
@@ -76,9 +86,9 @@ export default function AuditHeadSection({
         <InputWithIcon
           value={agentFilter}
           onChange={onAgentFilterChange}
-          placeholder="Filter by Agent/Action"
-          icon={<ChevronDown className="h-4 w-4 text-slate-400" />}
-          ariaLabel="Filter by agent"
+          placeholder="Filter by agent or action"
+          icon={<Filter className="h-4 w-4 text-slate-400" />}
+          ariaLabel="Filter by agent or action"
         />
       </div>
 

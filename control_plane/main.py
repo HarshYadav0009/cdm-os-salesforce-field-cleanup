@@ -74,8 +74,10 @@ async def lifespan(app: FastAPI):
             tools_to_seed = [
                 ("salesforce_full_field_assessment", "Full Field Safety Assessment", "Run metadata, population, and reference scan report", ToolTier.TIER_1),
                 ("salesforce_describe_object", "Describe Object Metadata", "Retrieve object field definitions", ToolTier.TIER_1),
-                ("salesforce_query_field_usage", "Query Field Record Population", "Calculate record population %", ToolTier.TIER_2),
-                ("salesforce_deprecate_field", "Deprecate Custom Field", "Back up and deprecate a custom field; requires human approval", ToolTier.TIER_3),
+                ("salesforce_query_field_usage", "Query Field Record Population", "Calculate record population %", ToolTier.TIER_1),
+                ("salesforce_scan_apex_references", "Scan Apex References", "Find references in Apex, Flows, Triggers, and Lightning components", ToolTier.TIER_1),
+                ("salesforce_backup_field_def", "Backup Field Definition", "Create a metadata snapshot before changing a custom field", ToolTier.TIER_2),
+                ("salesforce_deprecate_field", "Deprecate Custom Field", "Back up and mark a custom field description as deprecated; leaves field access unchanged", ToolTier.TIER_2),
                 ("salesforce_delete_field", "Delete Custom Field", "Permanently delete custom field", ToolTier.TIER_3),
             ]
             for tool_id, name, desc, tier in tools_to_seed:
