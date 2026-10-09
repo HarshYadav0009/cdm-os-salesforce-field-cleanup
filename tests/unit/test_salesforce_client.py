@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from servers.salesforce.client import SalesforceClient
 
@@ -56,3 +58,41 @@ def test_salesforce_client_describe_global():
     names = [s["name"] for s in g["sobjects"]]
     assert "Account" in names
     assert "Custom_Invoice__c" in names
+
+
+def test_live_field_description_uses_metadata_api():
+    component = SimpleNamespace(fullName="Case.POC_test__c", description="")
+    read_calls = []
+    update_calls = []
+    client = SalesforceClient.__new__(SalesforceClient)
+    client._mock_mode = False
+    client.sf = SimpleNamespace(
+        mdapi=SimpleNamespace(
+            CustomField=SimpleNamespace(
+                read=lambda names: read_calls.append(names) or component,
+                update=lambda components: update_calls.append(components),
+            )
+        )
+    )
+
+    assert client.update_field_description(
+        "Case", "POC_test__c", "[DEPRECATED] Test field"
+    )
+
+    assert read_calls == [["Case.POC_test__c"]]
+    assert update_calls == [[component]]
+    assert component.description == "[DEPRECATED] Test field"
+
+
+def test_live_field_permissions_do_not_report_mock_update_as_success():
+    client = SalesforceClient.__new__(SalesforceClient)
+    client._mock_mode = False
+    client.sf = object()
+
+    with pytest.raises(NotImplementedError, match="not implemented"):
+        client.update_field_permissions(
+            "Case",
+            "POC_test__c",
+            readable=False,
+            editable=False,
+        )

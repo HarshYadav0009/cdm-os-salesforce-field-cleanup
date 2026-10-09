@@ -1,11 +1,14 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Bell, CircleUserRound, Menu } from "lucide-react";
-import { useRealtime } from "@/app/lib/ws/RealtimeProvider";
+
+type McpStatus = "checking" | "online" | "offline";
 
 interface HeadProps {
   /** Shows the hamburger toggle on mobile/tablet (< lg) */
-  onOpenNav?: () => void;
+  onToggleNav: () => void;
+  navOpen: boolean;
   /** Full app title — abbreviates on mobile */
   title?: string;
   shortTitle?: string;
@@ -16,7 +19,8 @@ interface HeadProps {
 }
 
 export default function Head({
-  onOpenNav,
+  onToggleNav,
+  navOpen,
   title = "CDM-OS Guardian & Governance",
   shortTitle = "CDM-OS",
   userName = "Sumit",
@@ -24,15 +28,64 @@ export default function Head({
   onBellClick,
   onUserClick,
 }: HeadProps) {
-  const { status } = useRealtime();
+  const [mcpStatus, setMcpStatus] = useState<McpStatus>("checking");
+  const [isMock, setIsMock] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const checkMcpStatus = async () => {
+      try {
+        const response = await fetch("/api/salesforce/health", {
+          cache: "no-store",
+        });
+        const result: unknown = await response.json();
+        if (!active) return;
+
+        const online =
+          response.ok &&
+          typeof result === "object" &&
+          result !== null &&
+          "status" in result &&
+          result.status === "online";
+        setMcpStatus(online ? "online" : "offline");
+        setIsMock(
+          online &&
+            "is_mock" in result &&
+            result.is_mock === true,
+        );
+      } catch {
+        if (!active) return;
+        setMcpStatus("offline");
+        setIsMock(false);
+      }
+    };
+
+    void checkMcpStatus();
+    const interval = window.setInterval(() => void checkMcpStatus(), 15000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const statusLabel =
+    mcpStatus === "checking"
+      ? "Checking MCP"
+      : mcpStatus === "online"
+        ? `MCP Online${isMock ? " (Mock)" : ""}`
+        : "MCP Offline";
 
   return (
     <header className="flex shrink-0 items-center gap-2 border-b border-slate-700 bg-[#0D1C42] px-3 py-2 sm:px-4 sm:py-3">
       {/* Mobile menu button */}
       <button
         type="button"
-        onClick={onOpenNav}
-        aria-label="Open navigation"
+        onClick={onToggleNav}
+        aria-label={navOpen ? "Close navigation" : "Open navigation"}
+        aria-expanded={navOpen}
+        aria-controls="main-navigation"
         className="shrink-0 rounded-md p-2 text-slate-200 transition-colors hover:bg-slate-800/60 lg:hidden"
       >
         <Menu className="h-5 w-5" />
@@ -43,9 +96,22 @@ export default function Head({
         <span className="md:hidden">{shortTitle}</span>
         <span className="hidden md:inline">{title}</span>
       </h1>
-      <span className="hidden items-center gap-2 rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300 sm:flex">
-        <span className={`h-2 w-2 rounded-full ${status === "connected" ? "bg-emerald-400" : status === "connecting" ? "bg-amber-400" : "bg-slate-500"}`} />
-        Live {status}
+      <span
+        role="status"
+        aria-label={statusLabel}
+        title={isMock ? "MCP is responding with Salesforce mock data." : statusLabel}
+        className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-300 sm:gap-2 sm:px-2.5 sm:text-xs"
+      >
+        <span
+          className={`h-2 w-2 rounded-full ${
+            mcpStatus === "online"
+              ? "bg-emerald-400"
+              : mcpStatus === "checking"
+                ? "bg-amber-400"
+                : "bg-rose-400"
+          }`}
+        />
+        {statusLabel}
       </span>
 
       {/* Right cluster */}

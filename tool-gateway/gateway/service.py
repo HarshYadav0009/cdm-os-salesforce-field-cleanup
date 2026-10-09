@@ -67,8 +67,14 @@ class ToolGatewayService:
             {
                 "tool_id": "salesforce_deprecate_field",
                 "name": "Deprecate Field",
-                "description": "Mark field as deprecated (update description + remove FLS) with auto-rollback",
+                "description": "Back up and mark a custom field description as deprecated; leaves field access unchanged",
                 "tier": "Tier-2",
+            },
+            {
+                "tool_id": "salesforce_delete_field",
+                "name": "Delete Custom Field",
+                "description": "Back up and delete an unmanaged custom field after human approval",
+                "tier": "Tier-3",
             },
             {
                 "tool_id": "salesforce_rollback_field",
@@ -136,6 +142,26 @@ class ToolGatewayService:
             validated.get("reason")
         )
 
+    async def delete_field(
+        self,
+        object_name: str,
+        field_name: str,
+        confirm_delete: bool,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        validated = validate_tool_payload("salesforce_delete_field", {
+            "object_name": object_name,
+            "field_name": field_name,
+            "confirm_delete": confirm_delete,
+            "reason": reason,
+        })
+        return await self.salesforce.delete_field(
+            validated["object_name"],
+            validated["field_name"],
+            validated["confirm_delete"],
+            validated.get("reason"),
+        )
+
     async def rollback_field(self, backup_id: str) -> Dict[str, Any]:
         validated = validate_tool_payload("salesforce_rollback_field", {"backup_id": backup_id})
         return await self.salesforce.rollback_field(validated["backup_id"])
@@ -178,6 +204,13 @@ class ToolGatewayService:
                 payload.get("object_name", ""),
                 payload.get("field_name", ""),
                 payload.get("reason")
+            )
+        elif tool_name == "salesforce_delete_field":
+            return await self.delete_field(
+                payload.get("object_name", ""),
+                payload.get("field_name", ""),
+                payload.get("confirm_delete", False),
+                payload.get("reason"),
             )
         elif tool_name == "salesforce_rollback_field":
             return await self.rollback_field(payload.get("backup_id", ""))

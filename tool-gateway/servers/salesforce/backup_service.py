@@ -68,10 +68,6 @@ class SalesforceBackupService:
             "field_name": field_name,
             "metadata": field_meta["field"],
             "description": field_meta["field"].get("description", ""),
-            "fls_settings": {
-                "readable": True,
-                "editable": field_meta["field"].get("updateable", True)
-            }
         }
 
         checksum = self._compute_checksum(backup_payload)
@@ -116,8 +112,8 @@ class SalesforceBackupService:
         backup_id: str
     ) -> Dict[str, Any]:
         """
-        Restore a field to its pre-modification state using the specified backup.
-        Restores description and Field-Level Security.
+        Restore a field description to its pre-modification state.
+        Field-Level Security is left unchanged by this workflow.
         """
         backup = self.get_backup(backup_id)
         if not backup:
@@ -126,7 +122,6 @@ class SalesforceBackupService:
         object_name = backup["object_name"]
         field_name = backup["field_name"]
         original_desc = backup.get("description", "")
-        fls = backup.get("fls_settings", {"readable": True, "editable": True})
 
         # Restore description
         desc_restored = self.client.update_field_description(
@@ -134,14 +129,10 @@ class SalesforceBackupService:
             field_name,
             original_desc
         )
-
-        # Restore permissions
-        fls_restored = self.client.update_field_permissions(
-            object_name,
-            field_name,
-            fls.get("readable", True),
-            fls.get("editable", True)
-        )
+        if not desc_restored:
+            raise RuntimeError(
+                f"Failed to restore description for {object_name}.{field_name}."
+            )
 
         logger.info(f"Rolled back {object_name}.{field_name} using backup {backup_id}")
 
@@ -151,7 +142,8 @@ class SalesforceBackupService:
             "object_name": object_name,
             "field_name": field_name,
             "restored_description": original_desc,
-            "fls_restored": fls_restored,
+            "fls_restored": False,
+            "fls_unchanged": True,
             "description_restored": desc_restored,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
