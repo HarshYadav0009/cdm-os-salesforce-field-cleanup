@@ -187,6 +187,7 @@ export default function RiskAssessmentModal({
           {!initialDecision && (
             <>
               <button
+                type="button"
                 onClick={() => setDecision("approve")}
                 aria-pressed={decision === "approve"}
                 className={`flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md px-4 py-2 text-white transition-colors ${decision === "approve" ? "bg-blue-600" : "bg-slate-700 hover:bg-slate-600"}`}
@@ -200,6 +201,7 @@ export default function RiskAssessmentModal({
               </button>
 
               <button
+                type="button"
                 onClick={() => setDecision("reject")}
                 aria-pressed={decision === "reject"}
                 className={`flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md px-4 py-2 text-white transition-colors ${decision === "reject" ? "bg-rose-700" : "bg-slate-700 hover:bg-slate-600"}`}

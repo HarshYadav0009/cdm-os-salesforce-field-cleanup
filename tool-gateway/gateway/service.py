@@ -9,6 +9,7 @@ if server_dir not in sys.path:
     sys.path.insert(0, server_dir)
 
 from servers.salesforce.mcp_client import SalesforceMCPClient
+from servers.salesforce.field_assessment import FieldAssessmentService
 from servers.salesforce.validators import validate_tool_payload
 
 logger = logging.getLogger("tool_gateway.service")
@@ -28,6 +29,12 @@ class ToolGatewayService:
 
     async def list_tools(self) -> List[Dict[str, Any]]:
         return [
+            {
+                "tool_id": "salesforce_full_field_assessment",
+                "name": "Full Field Safety Assessment",
+                "description": "Run one governed metadata, population, and reference assessment",
+                "tier": "Tier-1",
+            },
             {
                 "tool_id": "salesforce_describe_global",
                 "name": "Describe Global Objects",
@@ -118,6 +125,16 @@ class ToolGatewayService:
         })
         return await self.salesforce.scan_apex_references(validated["object_name"], validated["field_name"])
 
+    def full_field_assessment(self, object_name: str, field_name: str) -> Dict[str, Any]:
+        validated = validate_tool_payload(
+            "salesforce_full_field_assessment",
+            {"object_name": object_name, "field_name": field_name},
+        )
+        return FieldAssessmentService().run(
+            validated["object_name"],
+            validated["field_name"],
+        )
+
     async def backup_field_definition(self, object_name: str, field_name: str) -> Dict[str, Any]:
         validated = validate_tool_payload("salesforce_backup_field_definition", {
             "object_name": object_name,
@@ -197,6 +214,11 @@ class ToolGatewayService:
             return await self.query_field_usage(payload.get("object_name", ""), payload.get("field_name", ""))
         elif tool_name == "salesforce_scan_apex_references":
             return await self.scan_apex_references(payload.get("object_name", ""), payload.get("field_name", ""))
+        elif tool_name == "salesforce_full_field_assessment":
+            return self.full_field_assessment(
+                payload.get("object_name", ""),
+                payload.get("field_name", ""),
+            )
         elif tool_name == "salesforce_backup_field_definition":
             return await self.backup_field_definition(payload.get("object_name", ""), payload.get("field_name", ""))
         elif tool_name == "salesforce_deprecate_field":

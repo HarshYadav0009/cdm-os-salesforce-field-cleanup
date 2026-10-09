@@ -32,16 +32,17 @@ def _risk_level(usage: dict, refs: dict) -> str:
     """
     Determine risk level from usage and reference scan data.
     
-    BLOCKED      → field still referenced in Apex, Flows, or Validation Rules
+    BLOCKED      → field is referenced by code, automation, Lightning components, or validation rules
     NEEDS_REVIEW → field has history tracking OR is on page layouts
     SAFE_TO_DELETE → zero data + zero references + no tracking
     """
     has_apex = len([r for r in refs.get("apex_classes", []) if "scan_error" not in r]) > 0
     has_triggers = len([r for r in refs.get("apex_triggers", []) if "scan_error" not in r]) > 0
     has_flows = len([r for r in refs.get("flows", []) if "scan_error" not in r]) > 0
+    has_lwcs = len([r for r in refs.get("lwcs", []) if "scan_error" not in r]) > 0
     has_validation = len([r for r in refs.get("validation_rules", []) if "scan_error" not in r]) > 0
 
-    if has_apex or has_triggers or has_flows or has_validation:
+    if has_apex or has_triggers or has_flows or has_lwcs or has_validation:
         return RISK_BLOCKED
 
     has_layouts = len([r for r in refs.get("layouts", []) if "scan_error" not in r]) > 0
@@ -79,17 +80,27 @@ def _build_report(
     validation_blocked_names = [
         r["name"] for r in refs.get("validation_rules", []) if "scan_error" not in r
     ]
+    lwc_blocked_names = [
+        r["name"] for r in refs.get("lwcs", []) if "scan_error" not in r
+    ]
     layout_names = [
         r["name"] for r in refs.get("layouts", []) if "scan_error" not in r
     ]
 
     if risk == RISK_BLOCKED:
+        blocking_component_count = len(
+            apex_blocked_names
+            + trigger_blocked_names
+            + flow_blocked_names
+            + lwc_blocked_names
+            + validation_blocked_names
+        )
         summary = (
             f"🚫 BLOCKED — '{field_name}' is still referenced in code or business logic. "
-            f"It CANNOT be safely deleted without modifying {len(apex_blocked_names + trigger_blocked_names + flow_blocked_names)} component(s)."
+            f"It CANNOT be safely deleted without modifying {blocking_component_count} component(s)."
         )
         recommendation = (
-            "Remove all Apex, Flow, and Validation Rule references before attempting deletion. "
+            "Remove all Apex, Flow, Lightning component, and Validation Rule references before attempting deletion. "
             "See the reference_scan section for exact file names and line numbers."
         )
     elif risk == RISK_REVIEW:
@@ -142,6 +153,7 @@ def _build_report(
             "apex_classes": refs.get("apex_classes", []),
             "apex_triggers": refs.get("apex_triggers", []),
             "flows": refs.get("flows", []),
+            "lwcs": refs.get("lwcs", []),
             "validation_rules": refs.get("validation_rules", []),
             "layouts": refs.get("layouts", []),
             "history_tracking_enabled": refs.get("history_tracking_enabled", False),
@@ -153,6 +165,7 @@ def _build_report(
             "apex_classes_affected": apex_blocked_names,
             "apex_triggers_affected": trigger_blocked_names,
             "flows_affected": flow_blocked_names,
+            "lightning_components_affected": lwc_blocked_names,
             "validation_rules_affected": validation_blocked_names,
             "layouts_affected": layout_names,
             "history_tracking": refs.get("history_tracking_enabled", False),
