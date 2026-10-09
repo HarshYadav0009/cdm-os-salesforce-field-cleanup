@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, Any, List, Optional
 from fastmcp import FastMCP
 
@@ -6,6 +7,7 @@ from .field_usage import SalesforceFieldUsageService
 from .apex_scanner import SalesforceApexScanner
 from .backup_service import SalesforceBackupService
 from .deprecation_service import SalesforceFieldDeprecationService
+from .deletion_service import SalesforceFieldDeletionService
 from .bulk_scanner import SalesforceBulkScanner
 from .validators import validate_tool_payload
 
@@ -15,6 +17,7 @@ from .validators import validate_tool_payload
 # ============================================================
 
 mcp = FastMCP("Salesforce MCP Server")
+logger = logging.getLogger("salesforce.server")
 
 # Shared client instance — single auth session per process lifecycle
 _sf_client = None
@@ -35,11 +38,20 @@ def salesforce_health_check() -> Dict[str, Any]:
     """Check whether the Salesforce MCP server can communicate with Salesforce."""
     service = SalesforceMetadataService()
     result = service.describe_object("Account")
+    org_details = service.client.get_org_details()
+    org_user_name = None
+    try:
+        org_user_name = service.client.get_org_user_name()
+    except Exception:
+        logger.exception("Salesforce is connected, but the logged-in user name could not be loaded.")
     return {
         "status": "healthy",
         "salesforce_connected": True,
         "object_tested": result["object"],
-        "is_mock": service.client.is_mock
+        "is_mock": service.client.is_mock,
+        "org_type": org_details["org_type"],
+        "org_name": org_details["org_name"],
+        "org_user_name": org_user_name,
     }
 
 
@@ -155,8 +167,8 @@ def salesforce_deprecate_field(
     Deprecate a Salesforce custom field:
     1. Creates automatic backup snapshot.
     2. Tags field description with [DEPRECATED].
-    3. Restricts Field-Level Security (FLS).
-    4. Automatically rolls back if an error occurs.
+    3. Leaves Field-Level Security unchanged.
+    4. Automatically rolls back the description if an error occurs.
     """
     validated = validate_tool_payload("salesforce_deprecate_field", {
         "object_name": object_name,
@@ -168,6 +180,33 @@ def salesforce_deprecate_field(
         validated["object_name"],
         validated["field_name"],
         validated.get("reason")
+    )
+
+
+# ============================================================
+# APPROVED FIELD DELETION (TIER-3)
+# ============================================================
+
+@mcp.tool()
+def salesforce_delete_field(
+    object_name: str,
+    field_name: str,
+    confirm_delete: bool,
+    reason: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Back up and delete a custom field after policy and human approval."""
+    validated = validate_tool_payload("salesforce_delete_field", {
+        "object_name": object_name,
+        "field_name": field_name,
+        "confirm_delete": confirm_delete,
+        "reason": reason,
+    })
+    deletion_service = SalesforceFieldDeletionService()
+    return deletion_service.delete_field(
+        validated["object_name"],
+        validated["field_name"],
+        validated["confirm_delete"],
+        validated.get("reason"),
     )
 
 

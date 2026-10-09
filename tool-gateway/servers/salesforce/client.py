@@ -134,6 +134,84 @@ class SalesforceClient:
     def is_mock(self) -> bool:
         return self._mock_mode
 
+    def get_org_type(self) -> str:
+        """Return the configured label or classify the connected Salesforce org."""
+        return self.get_org_details()["org_type"]
+
+    def get_org_details(self) -> Dict[str, Optional[str]]:
+        """Return the configured type and Salesforce organization's display name."""
+        configured_type = os.getenv("SF_ORG_TYPE", "").strip().casefold()
+        org_type_labels = {
+            "developer": "Developer",
+            "uat": "UAT",
+            "sandbox": "Sandbox",
+            "production": "Production",
+        }
+        if configured_type:
+            if configured_type not in org_type_labels:
+                raise ValueError(
+                    "SF_ORG_TYPE must be Developer, UAT, Sandbox, or Production."
+                )
+            org_type = org_type_labels[configured_type]
+        elif self._mock_mode or self.sf is None:
+            org_type = "Mock"
+        else:
+            org_type = ""
+
+        if self._mock_mode or self.sf is None:
+            return {"org_type": org_type or "Mock", "org_name": None}
+
+        organizations = self.sf.query(
+            "SELECT Name, IsSandbox, OrganizationType FROM Organization LIMIT 1"
+        ).get("records", [])
+        if not organizations:
+            raise RuntimeError("Salesforce did not return organization details.")
+
+        organization = organizations[0]
+        if not org_type:
+            if organization.get("IsSandbox"):
+                org_type = "Sandbox"
+            elif organization.get("OrganizationType") == "Developer Edition":
+                org_type = "Developer"
+            else:
+                org_type = "Production"
+        org_name = organization.get("Name")
+        return {
+            "org_type": org_type,
+            "org_name": org_name.strip() if isinstance(org_name, str) and org_name.strip() else None,
+        }
+
+    def get_org_user_name(self) -> str | None:
+        """Return the name of the user authenticated to this Salesforce session."""
+        if self._mock_mode or self.sf is None:
+            return None
+
+        queries = []
+        user_id = getattr(self.sf, "user_id", None)
+        if isinstance(user_id, str) and re.fullmatch(
+            r"[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?", user_id
+        ):
+            queries.append(f"SELECT Name FROM User WHERE Id = '{user_id}' LIMIT 1")
+
+        if isinstance(self.username, str) and self.username.strip():
+            escaped_username = self.username.strip().replace("\\", "\\\\").replace("'", "\\'")
+            queries.append(
+                "SELECT Name FROM User "
+                f"WHERE Username = '{escaped_username}' LIMIT 1"
+            )
+
+        for soql in queries:
+            try:
+                records = self.sf.query(soql).get("records", [])
+            except Exception as error:
+                logger.warning("Unable to query the logged-in Salesforce user's name: %s", error)
+                continue
+            if records and isinstance(records[0].get("Name"), str):
+                return records[0]["Name"]
+
+        logger.warning("Salesforce did not return the logged-in user's full name.")
+        return None
+
     def query(self, soql: str) -> Dict[str, Any]:
         """Execute a read-only SOQL query."""
         if not self._mock_mode and self.sf:
@@ -233,17 +311,40 @@ class SalesforceClient:
             })
         return {"sobjects": sobjects_summary}
 
+    def delete_custom_field(self, object_name: str, field_name: str) -> None:
+        """Delete a custom field using Salesforce Metadata API."""
+        if not self._mock_mode and self.sf:
+            self.sf.mdapi.CustomField.delete([f"{object_name}.{field_name}"])
+            return
+
+        object_data = self._mock_objects.get(object_name)
+        if object_data is None:
+            raise ValueError(f"SObject '{object_name}' not found in Salesforce org.")
+
+        fields = object_data.get("fields", [])
+        matching_field = next(
+            (field for field in fields if field.get("name", "").lower() == field_name.lower()),
+            None,
+        )
+        if matching_field is None:
+            raise ValueError(
+                f"Field '{field_name}' not found on object '{object_name}'."
+            )
+        if not matching_field.get("custom", False):
+            raise ValueError(f"Standard Salesforce field '{field_name}' cannot be deleted.")
+
+        fields.remove(matching_field)
+
     def update_field_description(self, object_name: str, field_name: str, new_description: str) -> bool:
         """Update field description (used for deprecation tagging)."""
         if not self._mock_mode and self.sf:
-            # Query custom field id in Tooling API
-            q = f"SELECT Id FROM CustomField WHERE TableEnumOrId = '{object_name}' AND DeveloperName = '{field_name.replace('__c', '')}'"
-            res = self.sf.restful(f"tooling/query/?q={q}")
-            if res.get("records"):
-                cf_id = res["records"][0]["Id"]
-                self.sf.restful(f"tooling/sobjects/CustomField/{cf_id}", method="PATCH", data={"Description": new_description})
-                return True
-            return False
+            full_name = f"{object_name}.{field_name}"
+            metadata = self.sf.mdapi.CustomField.read([full_name])
+            if not metadata:
+                return False
+            metadata.description = new_description
+            self.sf.mdapi.CustomField.update([metadata])
+            return True
 
         # In-memory mock update
         obj_data = self._mock_objects.get(object_name)
@@ -255,7 +356,12 @@ class SalesforceClient:
         return False
 
     def update_field_permissions(self, object_name: str, field_name: str, readable: bool, editable: bool) -> bool:
-        """Update Field-Level Security permissions."""
+        """Update mock Field-Level Security state; live updates are not implemented."""
+        if not self._mock_mode and self.sf:
+            raise NotImplementedError(
+                "Live Salesforce field-level security updates are not implemented."
+            )
+
         key = f"{object_name}.{field_name}"
         self._mock_fls_records[key] = {
             "readable": readable,
