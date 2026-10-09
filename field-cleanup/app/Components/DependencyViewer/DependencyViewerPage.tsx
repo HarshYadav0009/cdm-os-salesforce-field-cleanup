@@ -12,6 +12,7 @@ import {
   type SalesforceObjectSummary,
   type SalesforceReferenceScan,
 } from "@/app/lib/api/salesforce";
+import GovernanceAPI from "@/app/lib/api/governance";
 
 interface FieldAnalysis {
   usage: SalesforceFieldUsage;
@@ -155,12 +156,49 @@ export default function DependencyViewerPage() {
         SalesforceAPI.scanReferences(object, field),
       ]);
       setAnalysis({ usage, references });
+      try {
+        await GovernanceAPI.recordFieldAnalysis({
+          object_name: object,
+          field_name: field,
+          outcome: "SUCCEEDED",
+          usage: {
+            total_records: usage.total_records,
+            populated_records: usage.populated_records,
+            usage_percentage: usage.usage_percentage,
+            zero_usage_candidate: usage.zero_usage_candidate,
+          },
+          references: {
+            reference_count: references.reference_count,
+            summary: references.summary,
+          },
+        });
+      } catch (auditError) {
+        const message =
+          auditError instanceof Error
+            ? auditError.message
+            : "Unable to record the field analysis in the audit log.";
+        setAnalysisError(`Analysis completed, but its audit event could not be saved: ${message}`);
+      }
     } catch (error) {
-      setAnalysisError(
+      const message =
         error instanceof Error
           ? error.message
-          : `Unable to analyze ${object}.${field}.`,
-      );
+          : `Unable to analyze ${object}.${field}.`;
+      setAnalysisError(message);
+      try {
+        await GovernanceAPI.recordFieldAnalysis({
+          object_name: object,
+          field_name: field,
+          outcome: "FAILED",
+          error_message: message,
+        });
+      } catch (auditError) {
+        const auditMessage =
+          auditError instanceof Error
+            ? auditError.message
+            : "Unable to record the failed analysis in the audit log.";
+        setAnalysisError(`${message} Audit event could not be saved: ${auditMessage}`);
+      }
     } finally {
       setAnalysisLoading(false);
     }
@@ -259,7 +297,10 @@ export default function DependencyViewerPage() {
 
             {analysisError && (
               <p role="alert" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.06] p-4 text-sm text-rose-200">
-                Analysis failed: {analysisError}
+                {analysis
+                  ? "Analysis completed with an audit warning:"
+                  : "Analysis failed:"}{" "}
+                {analysisError}
               </p>
             )}
 

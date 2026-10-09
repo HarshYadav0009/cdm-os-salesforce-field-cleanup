@@ -118,6 +118,28 @@ export const GovernanceAPI = {
     return request<AuditLogEntry[]>(`/audit/?limit=${encodeURIComponent(String(limit))}`);
   },
 
+  recordFieldAnalysis: async (payload: {
+    object_name: string;
+    field_name: string;
+    outcome: "SUCCEEDED" | "FAILED";
+    usage?: {
+      total_records: number;
+      populated_records: number;
+      usage_percentage: number;
+      zero_usage_candidate: boolean;
+    };
+    references?: {
+      reference_count: number;
+      summary: string;
+    };
+    error_message?: string;
+  }): Promise<AuditLogEntry> => {
+    return request<AuditLogEntry>("/audit/field-analysis", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
 // ================================================================================================= Agents
   getAgents: async (): Promise<Agent[]> => {
     return request<Agent[]>("/agents/");

@@ -1,21 +1,61 @@
 """
 CDM-OS — API Routes: Audit Log
 
-Read-only endpoints for browsing the immutable audit trail.
+Endpoints for recording and browsing the immutable audit trail.
 Used by the Governance UI compliance view.
 """
 
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from control_plane.audit import record_event
 from control_plane.database import get_db
 from control_plane.models import AuditLog
 from control_plane.schemas import AuditLogResponse
 
 router = APIRouter(prefix="/audit", tags=["Audit"])
+
+
+class FieldAnalysisUsage(BaseModel):
+    total_records: int = Field(..., ge=0)
+    populated_records: int = Field(..., ge=0)
+    usage_percentage: float = Field(..., ge=0, le=100)
+    zero_usage_candidate: bool
+
+
+class FieldAnalysisReferences(BaseModel):
+    reference_count: int = Field(..., ge=0)
+    summary: str = Field(..., max_length=2000)
+
+
+class FieldAnalysisAuditCreate(BaseModel):
+    object_name: str = Field(..., min_length=1, max_length=255)
+    field_name: str = Field(..., min_length=1, max_length=255)
+    outcome: Literal["SUCCEEDED", "FAILED"]
+    usage: Optional[FieldAnalysisUsage] = None
+    references: Optional[FieldAnalysisReferences] = None
+    error_message: Optional[str] = Field(None, max_length=1000)
+
+
+@router.post("/field-analysis", response_model=AuditLogResponse, status_code=201)
+def record_field_analysis(
+    body: FieldAnalysisAuditCreate,
+    db: Session = Depends(get_db),
+):
+    """Persist a signed audit event for a field analysis run."""
+    entry = record_event(
+        db,
+        "FIELD_ANALYSIS",
+        "field-cleanup-ui",
+        body.model_dump(exclude_none=True),
+    )
+    db.commit()
+    db.refresh(entry)
+    return entry
 
 
 @router.get("", response_model=list[AuditLogResponse], include_in_schema=False)
