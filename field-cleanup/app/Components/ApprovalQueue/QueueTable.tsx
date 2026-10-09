@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowUpRight, Check, FileSearch, LoaderCircle, X } from "lucide-react";
 import type { Proposal } from "@/types/governance";
 
 export interface QueueRow {
@@ -14,6 +15,9 @@ export interface QueueRow {
 
 interface QueueTableProps {
   rows: QueueRow[];
+  loading: boolean;
+  emptyTitle: string;
+  emptyMessage: string;
   onViewEvidence: (row: QueueRow) => void;
   onApprove: (row: QueueRow) => void;
   onReject: (row: QueueRow) => void;
@@ -21,65 +25,76 @@ interface QueueTableProps {
 
 export default function QueueTable({
   rows,
+  loading,
+  emptyTitle,
+  emptyMessage,
   onViewEvidence,
   onApprove,
   onReject,
 }: QueueTableProps) {
   if (rows.length === 0) {
     return (
-      <div className="border-t border-slate-700 px-4 py-12 text-center text-sm text-slate-400">
-        No pending approvals. 🎉
+      <div className="flex min-h-64 flex-col items-center justify-center px-6 py-12 text-center">
+        <div className={`mb-4 rounded-2xl border p-3 ${loading ? "border-blue-400/15 bg-blue-400/10 text-blue-300" : "border-emerald-400/15 bg-emerald-400/10 text-emerald-300"}`}>
+          {loading ? <LoaderCircle className="h-6 w-6 animate-spin" /> : <Check className="h-6 w-6" />}
+        </div>
+        <h3 className="text-sm font-semibold text-slate-100">
+          {loading ? "Loading approvals" : emptyTitle}
+        </h3>
+        <p className="mt-1 max-w-sm text-sm text-slate-500">
+          {loading ? "Fetching pending proposals from the control plane…" : emptyMessage}
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="w-full bg-slate-900 text-slate-200">
-      {/* ───────── Desktop / tablet: table ───────── */}
-      <div className="hidden md:block max-h-[33rem] overflow-auto">
-        <table className="w-full table-fixed border-collapse text-sm">
-          <thead className="sticky top-0 z-10">
-            <tr>
-              {[
-                ["Target Field (SObject.API Name)", "18%"],
-                ["Target Field", "12%"],
-                ["Proposed Action", "16%"],
-                ["Risk Tier", "14%"],
-                ["Queue Time", "10%"],
-                ["Evidence", "14%"],
-                ["Inline Controls", "16%"],
-              ].map(([label, width]) => (
-                <th
-                  key={label}
-                  style={{ width }}
-                  className="border-b border-slate-600 bg-slate-700 px-3 py-3 text-left font-semibold"
-                >
-                  {label}
-                </th>
-              ))}
+    <div className="w-full">
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[900px] table-fixed text-left text-sm">
+          <thead>
+            <tr className="border-b border-slate-800 bg-slate-950/40 text-[11px] uppercase tracking-wider text-slate-500">
+              <th className="w-[24%] px-5 py-3 font-semibold">Target</th>
+              <th className="w-[18%] px-4 py-3 font-semibold">Proposed action</th>
+              <th className="w-[13%] px-4 py-3 font-semibold">Risk tier</th>
+              <th className="w-[12%] px-4 py-3 font-semibold">Submitted</th>
+              <th className="w-[13%] px-4 py-3 font-semibold">Evidence</th>
+              <th className="w-[20%] px-5 py-3 text-right font-semibold">
+                Decision
+              </th>
             </tr>
           </thead>
-
-          <tbody>
+          <tbody className="divide-y divide-slate-800/80">
             {rows.map((row) => (
               <tr
                 key={row.id}
-                className="border-b border-slate-800 align-top transition-colors last:border-0 hover:bg-slate-800/40"
+                className="align-middle transition-colors hover:bg-slate-800/30"
               >
-                <td className="break-words px-3 py-3">{row.targetField}</td>
-                <td className="break-words px-3 py-3">{row.targetName}</td>
-                <td className="break-words px-3 py-3">{row.action}</td>
-                <td className="px-3 py-3">
-                  <RiskBadge risk={row.risk} />
+                <td className="px-5 py-4">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-slate-100" title={row.targetName}>
+                      {row.targetName}
+                    </p>
+                    <p className="mt-1 truncate font-mono text-xs text-slate-500" title={row.targetField}>
+                      {row.targetField}
+                    </p>
+                    <p className="mt-1 truncate text-[10px] text-slate-600" title={row.id}>
+                      ID · {row.id}
+                    </p>
+                  </div>
                 </td>
-                <td className="whitespace-nowrap px-3 py-3">
+                <td className="break-words px-4 py-4 text-slate-300">{row.action}</td>
+                <td className="px-4 py-4">
+                  <RiskBadge tier={row.proposal.tier} />
+                </td>
+                <td className="whitespace-nowrap px-4 py-4 text-xs text-slate-400">
                   {row.queueTime}
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-4 py-4">
                   <EvidenceButton onClick={() => onViewEvidence(row)} />
                 </td>
-                <td className="px-3 py-3">
-                  <InlineControls
+                <td className="px-5 py-4">
+                  <DecisionControls
                     onApprove={() => onApprove(row)}
                     onReject={() => onReject(row)}
                   />
@@ -90,36 +105,31 @@ export default function QueueTable({
         </table>
       </div>
 
-      {/* ───────── Mobile: card list ───────── */}
       <ul className="divide-y divide-slate-800 md:hidden">
         {rows.map((row) => (
-          <li key={row.id} className="space-y-3 p-4">
+          <li key={row.id} className="space-y-4 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs uppercase tracking-wide text-slate-400">
-                  Target
-                </p>
-                <p className="truncate text-sm font-medium">
-                  {row.targetName}
-                </p>
+                <p className="truncate font-medium text-slate-100">{row.targetName}</p>
+                <p className="mt-1 truncate font-mono text-xs text-slate-500">{row.targetField}</p>
               </div>
-              <RiskBadge risk={row.risk} />
+              <RiskBadge tier={row.proposal.tier} />
             </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <Field label="Field" value={row.targetField} />
-              <Field label="Action" value={row.action} />
-              <Field label="Queue Time" value={row.queueTime} />
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+              <MobileField label="Action" value={row.action} />
+              <MobileField label="Submitted" value={row.queueTime} />
+              <MobileField label="Proposal ID" value={row.id} />
               <div>
-                <p className="text-slate-400">Evidence</p>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Risk packet
+                </p>
                 <EvidenceButton onClick={() => onViewEvidence(row)} />
               </div>
             </div>
-
-            <InlineControls
+            <DecisionControls
+              full
               onApprove={() => onApprove(row)}
               onReject={() => onReject(row)}
-              full
             />
           </li>
         ))}
@@ -128,21 +138,29 @@ export default function QueueTable({
   );
 }
 
-/* ───────── Small reusable pieces ───────── */
-
-function Field({ label, value }: { label: string; value: string }) {
+function MobileField({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <p className="text-slate-400">{label}</p>
-      <p className="truncate">{value}</p>
+    <div className="min-w-0">
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        {label}
+      </p>
+      <p className="truncate text-xs text-slate-300" title={value}>
+        {value}
+      </p>
     </div>
   );
 }
 
-function RiskBadge({ risk }: { risk: string }) {
+function RiskBadge({ tier }: { tier: Proposal["tier"] }) {
+  const styles: Record<Proposal["tier"], string> = {
+    "Tier-1": "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
+    "Tier-2": "border-amber-400/20 bg-amber-400/10 text-amber-300",
+    "Tier-3": "border-rose-400/20 bg-rose-400/10 text-rose-300",
+  };
+
   return (
-    <span className="inline-block whitespace-nowrap rounded-full bg-orange-600 px-2 py-1 text-xs font-medium text-white">
-      {risk}
+    <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${styles[tier]}`}>
+      {tier.replace("-", " ")}
     </span>
   );
 }
@@ -152,14 +170,16 @@ function EvidenceButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="cursor-pointer text-blue-400 hover:text-blue-300 hover:underline"
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-300 transition-colors hover:text-blue-200"
     >
-      View Risk Packet
+      <FileSearch className="h-4 w-4" />
+      Risk packet
+      <ArrowUpRight className="h-3 w-3" />
     </button>
   );
 }
 
-function InlineControls({
+function DecisionControls({
   onApprove,
   onReject,
   full = false,
@@ -169,22 +189,22 @@ function InlineControls({
   full?: boolean;
 }) {
   return (
-    <div
-      className={`flex flex-wrap items-center gap-2 ${
-        full ? "w-full [&>button]:flex-1" : ""
-      }`}
-    >
+    <div className={`flex items-center gap-2 ${full ? "w-full [&>button]:flex-1" : "justify-end"}`}>
       <button
-        onClick={onApprove}
-        className="cursor-pointer rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-green-500"
+        type="button"
+        onClick={onReject}
+        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-rose-400/40 hover:bg-rose-400/10 hover:text-rose-200"
       >
-        Approve
+        <X className="h-3.5 w-3.5" />
+        Reject
       </button>
       <button
-        onClick={onReject}
-        className="cursor-pointer rounded-md bg-red-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-red-500"
+        type="button"
+        onClick={onApprove}
+        className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-slate-950 transition-colors hover:bg-emerald-400"
       >
-        Reject
+        <Check className="h-3.5 w-3.5" />
+        Approve
       </button>
     </div>
   );

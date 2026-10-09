@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, Any, List, Optional
 from fastmcp import FastMCP
 
@@ -16,6 +17,7 @@ from .validators import validate_tool_payload
 # ============================================================
 
 mcp = FastMCP("Salesforce MCP Server")
+logger = logging.getLogger("salesforce.server")
 
 # Shared client instance — single auth session per process lifecycle
 _sf_client = None
@@ -36,11 +38,20 @@ def salesforce_health_check() -> Dict[str, Any]:
     """Check whether the Salesforce MCP server can communicate with Salesforce."""
     service = SalesforceMetadataService()
     result = service.describe_object("Account")
+    org_details = service.client.get_org_details()
+    org_user_name = None
+    try:
+        org_user_name = service.client.get_org_user_name()
+    except Exception:
+        logger.exception("Salesforce is connected, but the logged-in user name could not be loaded.")
     return {
         "status": "healthy",
         "salesforce_connected": True,
         "object_tested": result["object"],
-        "is_mock": service.client.is_mock
+        "is_mock": service.client.is_mock,
+        "org_type": org_details["org_type"],
+        "org_name": org_details["org_name"],
+        "org_user_name": org_user_name,
     }
 
 

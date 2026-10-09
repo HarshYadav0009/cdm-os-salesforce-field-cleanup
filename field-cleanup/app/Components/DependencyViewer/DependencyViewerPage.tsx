@@ -218,11 +218,16 @@ export default function DependencyViewerPage() {
         },
       });
     } catch (error) {
-      toast.error(
+      const errorMessage =
         error instanceof Error
           ? error.message
-          : `Unable to submit ${label.toLowerCase()}.`,
-        "Proposal submission failed",
+          : `Unable to submit ${label.toLowerCase()}.`;
+      const alreadyPending = errorMessage.includes(
+        "already present in the Approval Queue",
+      );
+      toast.error(
+        errorMessage,
+        alreadyPending ? "Already in Approval Queue" : "Proposal submission failed",
       );
       setSubmittingToolId(null);
       return;
@@ -369,6 +374,33 @@ export default function DependencyViewerPage() {
 
     return () => controller.abort();
   }, [object, metadataRevision]);
+
+  useEffect(() => {
+    const refreshAfterFieldDeletion = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const detail: unknown = event.detail;
+      if (
+        !isRecord(detail) ||
+        typeof detail.objectName !== "string" ||
+        detail.objectName.toLowerCase() !== object.toLowerCase()
+      ) {
+        return;
+      }
+
+      setMetadataLoading(true);
+      setMetadataError(null);
+      setAnalysis(null);
+      setAnalysisError(null);
+      setMetadataRevision((revision) => revision + 1);
+    };
+
+    window.addEventListener("salesforce-field-deleted", refreshAfterFieldDeletion);
+    return () =>
+      window.removeEventListener(
+        "salesforce-field-deleted",
+        refreshAfterFieldDeletion,
+      );
+  }, [object]);
 
   const fields = useMemo(
     () => metadata?.fields.map((item) => item.name) ?? [],

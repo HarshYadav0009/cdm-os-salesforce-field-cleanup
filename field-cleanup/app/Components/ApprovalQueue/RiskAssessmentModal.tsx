@@ -183,39 +183,51 @@ export default function RiskAssessmentModal({
         </div>
 
         {/* Sticky footer actions */}
-        <div className="flex flex-col gap-2 border-t border-slate-700 bg-slate-900 p-3 sm:flex-row sm:gap-3 sm:p-4">
-          <button
-            onClick={() => setDecision("approve")}
-            aria-pressed={decision === "approve"}
-            className={`flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md px-4 py-2 text-white transition-colors ${decision === "approve" ? "bg-blue-600" : "bg-slate-700 hover:bg-slate-600"}`}
-          >
-            <span className="text-sm font-semibold uppercase tracking-wide">
-              Approve Remediation
-            </span>
-            <span className="mt-0.5 text-xs text-blue-200">
-              (Releases Token)
-            </span>
-          </button>
+        <div className="flex flex-col justify-center gap-2 border-t border-slate-700 bg-slate-900 p-3 sm:flex-row sm:gap-3 sm:p-4">
+          {!initialDecision && (
+            <>
+              <button
+                onClick={() => setDecision("approve")}
+                aria-pressed={decision === "approve"}
+                className={`flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md px-4 py-2 text-white transition-colors ${decision === "approve" ? "bg-blue-600" : "bg-slate-700 hover:bg-slate-600"}`}
+              >
+                <span className="text-sm font-semibold uppercase tracking-wide">
+                  Approve Remediation
+                </span>
+                <span className="mt-0.5 text-xs text-blue-200">
+                  (Releases Token)
+                </span>
+              </button>
 
-          <button
-            onClick={() => setDecision("reject")}
-            aria-pressed={decision === "reject"}
-            className={`flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md px-4 py-2 text-white transition-colors ${decision === "reject" ? "bg-rose-700" : "bg-slate-700 hover:bg-slate-600"}`}
-          >
-            <span className="text-sm font-semibold uppercase tracking-wide">
-              Reject Proposal
-            </span>
-            <span className="mt-0.5 text-xs text-slate-400">
-              (Rollback Workflow)
-            </span>
-          </button>
+              <button
+                onClick={() => setDecision("reject")}
+                aria-pressed={decision === "reject"}
+                className={`flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md px-4 py-2 text-white transition-colors ${decision === "reject" ? "bg-rose-700" : "bg-slate-700 hover:bg-slate-600"}`}
+              >
+                <span className="text-sm font-semibold uppercase tracking-wide">
+                  Reject Proposal
+                </span>
+                <span className="mt-0.5 text-xs text-slate-400">
+                  (Rollback Workflow)
+                </span>
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={() => void submit()}
             disabled={!decision || !validEmail || reason.trim().length < 8 || busy}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+            className={`rounded-md px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40 ${
+              decision === "reject"
+                ? "bg-rose-700 hover:bg-rose-600"
+                : "bg-emerald-600 hover:bg-emerald-500"
+            }`}
           >
-            {busy ? "Recording…" : "Record decision"}
+            {busy
+              ? "Confirming…"
+              : initialDecision
+                ? `Confirm ${initialDecision === "approve" ? "approval" : "rejection"}`
+                : "Record decision"}
           </button>
         </div>
       </div>

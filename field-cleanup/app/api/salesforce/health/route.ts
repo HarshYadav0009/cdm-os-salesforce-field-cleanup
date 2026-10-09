@@ -32,6 +32,19 @@ export async function GET() {
     return Response.json({
       status: "online",
       is_mock: "is_mock" in salesforce && salesforce.is_mock === true,
+      org_type:
+        "org_type" in salesforce && typeof salesforce.org_type === "string"
+          ? salesforce.org_type
+          : null,
+      org_name:
+        "org_name" in salesforce && typeof salesforce.org_name === "string"
+          ? salesforce.org_name
+          : null,
+      org_user_name:
+        "org_user_name" in salesforce &&
+        typeof salesforce.org_user_name === "string"
+          ? salesforce.org_user_name
+          : null,
     });
   } catch {
     return Response.json({ status: "offline" }, { status: 503 });
