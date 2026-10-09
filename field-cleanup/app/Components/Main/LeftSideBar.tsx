@@ -60,6 +60,7 @@ export default function LeftSideBar({
 
       {/* ── Sidebar ── */}
       <aside
+        id="main-navigation"
         aria-label="Main navigation"
         className={[
           /* Base */

@@ -1,0 +1,22 @@
+{
+  "backup_id": "bak_Contact_POCTest__c_718154a047ee",
+  "created_at": "2026-10-09T11:42:55.076905+00:00",
+  "object_name": "Contact",
+  "field_name": "POCTest__c",
+  "metadata": {
+    "name": "POCTest__c",
+    "label": "POCTest",
+    "type": "boolean",
+    "length": 0,
+    "precision": 0,
+    "scale": 0,
+    "nillable": false,
+    "createable": true,
+    "updateable": true,
+    "calculated": false,
+    "custom": true,
+    "description": ""
+  },
+  "description": "",
+  "checksum": "39e4a76ee6a6f83c6dd13c6ff80cf9c47b1249c98e490f653ac2cd6ad08f729b"
+}

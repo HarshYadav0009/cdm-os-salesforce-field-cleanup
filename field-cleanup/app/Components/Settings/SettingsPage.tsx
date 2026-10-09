@@ -70,6 +70,7 @@ export default function SettingsPage() {
               <li>GET, POST /agents/</li>
               <li>GET /agents/{"{agent_id}"}</li>
               <li>PATCH /agents/{"{agent_id}"}/status?status=PAUSED</li>
+              <li>Valid statuses: IDLE, RUNNING, PAUSED, ERROR, TERMINATED</li>
               <li>GET /tools/</li>
               <li>GET /audit/?limit=50</li>
             </ul>

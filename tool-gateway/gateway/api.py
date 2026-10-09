@@ -32,6 +32,16 @@ class DeprecateRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class DeleteFieldRequest(BaseModel):
+    object_name: str
+    field_name: str
+    confirm_delete: bool = Field(
+        ...,
+        description="Must be true after explicit human approval",
+    )
+    reason: Optional[str] = None
+
+
 class RollbackRequest(BaseModel):
     backup_id: str
 
@@ -118,6 +128,19 @@ async def scan_references(request: FieldRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.post("/tools/salesforce/full-assessment")
+def full_field_assessment(request: FieldRequest):
+    try:
+        return gateway.full_field_assessment(
+            request.object_name,
+            request.field_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.post("/tools/salesforce/backup")
 async def backup_field(request: FieldRequest):
     try:
@@ -132,6 +155,21 @@ async def backup_field(request: FieldRequest):
 async def deprecate_field(request: DeprecateRequest):
     try:
         return await gateway.deprecate_field(request.object_name, request.field_name, request.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/tools/salesforce/delete")
+async def delete_field(request: DeleteFieldRequest):
+    try:
+        return await gateway.delete_field(
+            request.object_name,
+            request.field_name,
+            request.confirm_delete,
+            request.reason,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:

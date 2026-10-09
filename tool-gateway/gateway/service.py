@@ -9,6 +9,7 @@ if server_dir not in sys.path:
     sys.path.insert(0, server_dir)
 
 from servers.salesforce.mcp_client import SalesforceMCPClient
+from servers.salesforce.field_assessment import FieldAssessmentService
 from servers.salesforce.validators import validate_tool_payload
 
 logger = logging.getLogger("tool_gateway.service")
@@ -28,6 +29,12 @@ class ToolGatewayService:
 
     async def list_tools(self) -> List[Dict[str, Any]]:
         return [
+            {
+                "tool_id": "salesforce_full_field_assessment",
+                "name": "Full Field Safety Assessment",
+                "description": "Run one governed metadata, population, and reference assessment",
+                "tier": "Tier-1",
+            },
             {
                 "tool_id": "salesforce_describe_global",
                 "name": "Describe Global Objects",
@@ -67,8 +74,14 @@ class ToolGatewayService:
             {
                 "tool_id": "salesforce_deprecate_field",
                 "name": "Deprecate Field",
-                "description": "Mark field as deprecated (update description + remove FLS) with auto-rollback",
+                "description": "Back up and mark a custom field description as deprecated; leaves field access unchanged",
                 "tier": "Tier-2",
+            },
+            {
+                "tool_id": "salesforce_delete_field",
+                "name": "Delete Custom Field",
+                "description": "Back up and delete an unmanaged custom field after human approval",
+                "tier": "Tier-3",
             },
             {
                 "tool_id": "salesforce_rollback_field",
@@ -112,6 +125,16 @@ class ToolGatewayService:
         })
         return await self.salesforce.scan_apex_references(validated["object_name"], validated["field_name"])
 
+    def full_field_assessment(self, object_name: str, field_name: str) -> Dict[str, Any]:
+        validated = validate_tool_payload(
+            "salesforce_full_field_assessment",
+            {"object_name": object_name, "field_name": field_name},
+        )
+        return FieldAssessmentService().run(
+            validated["object_name"],
+            validated["field_name"],
+        )
+
     async def backup_field_definition(self, object_name: str, field_name: str) -> Dict[str, Any]:
         validated = validate_tool_payload("salesforce_backup_field_definition", {
             "object_name": object_name,
@@ -134,6 +157,26 @@ class ToolGatewayService:
             validated["object_name"],
             validated["field_name"],
             validated.get("reason")
+        )
+
+    async def delete_field(
+        self,
+        object_name: str,
+        field_name: str,
+        confirm_delete: bool,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        validated = validate_tool_payload("salesforce_delete_field", {
+            "object_name": object_name,
+            "field_name": field_name,
+            "confirm_delete": confirm_delete,
+            "reason": reason,
+        })
+        return await self.salesforce.delete_field(
+            validated["object_name"],
+            validated["field_name"],
+            validated["confirm_delete"],
+            validated.get("reason"),
         )
 
     async def rollback_field(self, backup_id: str) -> Dict[str, Any]:
@@ -171,6 +214,11 @@ class ToolGatewayService:
             return await self.query_field_usage(payload.get("object_name", ""), payload.get("field_name", ""))
         elif tool_name == "salesforce_scan_apex_references":
             return await self.scan_apex_references(payload.get("object_name", ""), payload.get("field_name", ""))
+        elif tool_name == "salesforce_full_field_assessment":
+            return self.full_field_assessment(
+                payload.get("object_name", ""),
+                payload.get("field_name", ""),
+            )
         elif tool_name == "salesforce_backup_field_definition":
             return await self.backup_field_definition(payload.get("object_name", ""), payload.get("field_name", ""))
         elif tool_name == "salesforce_deprecate_field":
@@ -178,6 +226,13 @@ class ToolGatewayService:
                 payload.get("object_name", ""),
                 payload.get("field_name", ""),
                 payload.get("reason")
+            )
+        elif tool_name == "salesforce_delete_field":
+            return await self.delete_field(
+                payload.get("object_name", ""),
+                payload.get("field_name", ""),
+                payload.get("confirm_delete", False),
+                payload.get("reason"),
             )
         elif tool_name == "salesforce_rollback_field":
             return await self.rollback_field(payload.get("backup_id", ""))

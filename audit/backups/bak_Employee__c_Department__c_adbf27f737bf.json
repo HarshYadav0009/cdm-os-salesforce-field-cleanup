@@ -1,0 +1,22 @@
+{
+  "backup_id": "bak_Employee__c_Department__c_adbf27f737bf",
+  "created_at": "2026-10-09T07:57:54.730960+00:00",
+  "object_name": "Employee__c",
+  "field_name": "Department__c",
+  "metadata": {
+    "name": "Department__c",
+    "label": "Department",
+    "type": "picklist",
+    "length": 255,
+    "precision": 0,
+    "scale": 0,
+    "nillable": true,
+    "createable": true,
+    "updateable": true,
+    "calculated": false,
+    "custom": true,
+    "description": ""
+  },
+  "description": "",
+  "checksum": "204135ac825ffd6750fe46e36c6cab162733a701e646e0df30018d631c90b4e1"
+}
