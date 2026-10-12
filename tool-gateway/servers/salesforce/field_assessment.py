@@ -49,7 +49,8 @@ def _risk_level(usage: dict, refs: dict) -> str:
     has_history = refs.get("history_tracking_enabled", False)
     has_data = usage.get("usage_percentage", 0) > 0
 
-    if has_layouts or has_history or has_data:
+    has_errors = any("scan_error" in item for key in ["apex_classes", "apex_triggers", "flows", "lwcs", "validation_rules", "layouts"] for item in refs.get(key, []))
+    if has_layouts or has_history or has_data or has_errors:
         return RISK_REVIEW
 
     return RISK_SAFE
@@ -97,7 +98,7 @@ def _build_report(
         )
         summary = (
             f"🚫 BLOCKED — '{field_name}' is still referenced in code or business logic. "
-            f"It CANNOT be safely deleted without modifying {blocking_component_count} component(s)."
+            f"Review {blocking_component_count} code or automation reference match(es) before considering deletion."
         )
         recommendation = (
             "Remove all Apex, Flow, Lightning component, and Validation Rule references before attempting deletion. "
@@ -105,8 +106,8 @@ def _build_report(
         )
     elif risk == RISK_REVIEW:
         summary = (
-            f"⚠️ NEEDS REVIEW — '{field_name}' has 0% data population but appears on page layouts "
-            f"or has history tracking enabled. Human review recommended before deletion."
+            f"⚠️ NEEDS REVIEW — '{field_name}' is {usage.get('usage_percentage', 0)}% populated. "
+            f"Review its layout usage, history tracking, and scan coverage before considering deletion."
         )
         recommendation = (
             "Remove the field from all page layouts and disable history tracking before deletion. "

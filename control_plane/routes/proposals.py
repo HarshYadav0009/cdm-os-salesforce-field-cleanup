@@ -10,6 +10,7 @@ Handles the full lifecycle of agent tool-call proposals:
 """
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
@@ -96,6 +97,13 @@ def create_proposal(body: ProposalCreate, db: Session = Depends(get_db)):
             400,
             "Explicit confirmation (confirm_delete=true) is required for field deletion.",
         )
+
+    if body.tool_id == "salesforce_rollback_field":
+        backup_id = body.input_payload.get("backup_id")
+        if not isinstance(backup_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_-]{0,199}", backup_id
+        ):
+            raise HTTPException(400, "A valid backup_id is required for description restoration.")
 
     # ── Run Policy Engine ─────────────────────────────────────
     decision = policy_engine.evaluate(
@@ -326,6 +334,8 @@ async def _run_tool_execution(
 
     gateway_url = settings.MCP_GATEWAY_URL.rstrip("/")
     timeout = float(settings.MCP_REQUEST_TIMEOUT_SEC)
+    if tool_id == "salesforce_full_field_assessment":
+        timeout = float(settings.FIELD_ASSESSMENT_TIMEOUT_SEC)
 
     endpoint_map = {
         "salesforce_full_field_assessment": "/tools/salesforce/full-assessment",
@@ -335,6 +345,7 @@ async def _run_tool_execution(
         "salesforce_deprecate_field": "/tools/salesforce/deprecate",
         "salesforce_backup_field_def": "/tools/salesforce/backup",
         "salesforce_delete_field": "/tools/salesforce/delete",
+        "salesforce_rollback_field": "/tools/salesforce/rollback",
         "salesforce_health_check": "/health",
     }
 
@@ -407,7 +418,11 @@ async def _run_tool_execution(
             proposal = db.query(Proposal).filter(Proposal.id == proposal_id).first()
             if proposal:
                 proposal.status = ProposalStatus.FAILED
-                proposal.error_message = str(exc)
+                proposal.error_message = (
+                    f"Tool Gateway timed out after {timeout:g} seconds while executing {tool_id}."
+                    if isinstance(exc, httpx.TimeoutException)
+                    else str(exc) or type(exc).__name__
+                )
                 proposal.executed_at = datetime.now(timezone.utc)
                 record_event(db, "EXECUTION_FAILED", "system", {
                     "error": str(exc),

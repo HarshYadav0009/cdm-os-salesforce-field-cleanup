@@ -197,30 +197,23 @@ class ApexReferenceScanner:
     def scan_validation_rules(self, object_name: str, field_name: str) -> list[dict]:
         """
         Search validation rule error condition formulas for field name references.
-        Uses the Tooling API ValidationRule query.
+        Reads errorConditionFormula from CustomObject validation-rule metadata.
         """
         object_name = validate_salesforce_identifier(object_name)
         field_name = validate_salesforce_identifier(field_name)
         results = []
 
         try:
-            soql = (
-                f"SELECT ValidationName, ErrorConditionFormula, Description, Active "
-                f"FROM ValidationRule "
-                f"WHERE EntityDefinition.QualifiedApiName = '{object_name}' "
-                f"AND Active = true "
-                f"LIMIT 200"
-            )
-            records = self.client.tooling_query(soql).get("records", [])
-
-            for rule in records:
-                formula = rule.get("ErrorConditionFormula", "") or ""
-                if field_name in formula:
+            metadata = self.client.read_object_metadata(object_name)
+            pattern = re.compile(rf"\b{re.escape(field_name)}\b", re.IGNORECASE)
+            for rule in metadata.get("validationRules") or []:
+                formula = rule.get("errorConditionFormula") or ""
+                if rule.get("active") and pattern.search(formula):
                     results.append({
                         "type": "ValidationRule",
-                        "name": rule.get("ValidationName"),
+                        "name": rule.get("fullName"),
                         "formula_snippet": formula[:150],
-                        "active": rule.get("Active"),
+                        "active": True,
                     })
 
         except Exception as exc:
@@ -239,36 +232,39 @@ class ApexReferenceScanner:
     def scan_layouts(self, object_name: str, field_name: str) -> list[dict]:
         """
         Check if the field appears on any active Page Layouts or Compact Layouts
-        using the MetadataComponentDependency Tooling API.
+        using page-layout metadata and CustomObject compact-layout definitions.
         """
         object_name = validate_salesforce_identifier(object_name)
         field_name = validate_salesforce_identifier(field_name)
         results = []
 
+        def contains_field(value):
+            if isinstance(value, dict):
+                return any(
+                    (key.lower() == "field" and isinstance(item, str) and item.casefold() == field_name.casefold())
+                    or contains_field(item)
+                    for key, item in value.items()
+                )
+            if isinstance(value, list):
+                return any(contains_field(item) for item in value)
+            return False
+
         try:
-            soql = (
-                f"SELECT MetadataComponentName, MetadataComponentType, "
-                f"RefMetadataComponentName "
-                f"FROM MetadataComponentDependency "
-                f"WHERE RefMetadataComponentName = '{field_name}' "
-                f"AND MetadataComponentType IN ('Layout', 'CompactLayout') "
-                f"LIMIT 50"
-            )
-            records = self.client.tooling_query(soql).get("records", [])
-
-            for rec in records:
-                results.append({
-                    "type": rec.get("MetadataComponentType"),
-                    "name": rec.get("MetadataComponentName"),
-                    "field": field_name,
-                })
-
+            for layout in self.client.read_page_layouts(object_name):
+                if contains_field(layout["metadata"]):
+                    results.append({"type": "Layout", "name": layout["name"], "field": field_name})
         except Exception as exc:
-            logger.warning(f"Layout scan failed: {exc}")
-            results.append({
-                "type": "Layout",
-                "scan_error": str(exc),
-            })
+            logger.warning(f"Page layout scan failed: {exc}")
+            results.append({"type": "Layout", "scan_error": str(exc)})
+
+        try:
+            metadata = self.client.read_object_metadata(object_name)
+            for layout in metadata.get("compactLayouts") or []:
+                if any(isinstance(name, str) and name.casefold() == field_name.casefold() for name in layout.get("fields") or []):
+                    results.append({"type": "CompactLayout", "name": layout.get("fullName"), "field": field_name})
+        except Exception as exc:
+            logger.warning(f"Compact layout scan failed: {exc}")
+            results.append({"type": "CompactLayout", "scan_error": str(exc)})
 
         return results
 
@@ -340,5 +336,5 @@ class ApexReferenceScanner:
             "layouts": layouts,
             "history_tracking_enabled": history_tracked,
             "total_metadata_references": total_references,
-            "is_safe_to_delete": (total_references == 0 and not history_tracked),
+            "is_safe_to_delete": (total_references == 0 and not history_tracked and not any("scan_error" in entry for group in [validation_rules, layouts, apex_classes, apex_triggers, flows, lwcs] for entry in group)),
         }

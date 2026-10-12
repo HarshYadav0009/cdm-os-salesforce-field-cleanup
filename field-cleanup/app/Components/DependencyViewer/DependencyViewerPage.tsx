@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, Loader2, ShieldAlert, WandSparkles } from "lucide-react";
+import RemediationProposals from "./RemediationProposals";
 import FieldSelectSection from "./FieldSelectSection";
 import DependentTable, { type Dependency } from "./DependentTable";
 import DetailSection, { type FieldDetail } from "./DeatailSection";
+import AssessmentSummary from "./AssessmentSummary";
 import {
   SalesforceAPI,
   type SalesforceFieldUsage,
@@ -25,8 +26,8 @@ interface FieldAnalysis {
 }
 
 const ANALYSIS_AGENT_ID = "field-cleanup-agent";
-const PROPOSAL_POLL_INTERVAL_MS = 500;
-const PROPOSAL_POLL_ATTEMPTS = 90;
+const PROPOSAL_POLL_INTERVAL_MS = 2000;
+const PROPOSAL_POLL_ATTEMPTS = 150;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -42,7 +43,9 @@ function getFieldAssessmentResults(proposal: Proposal): FieldAnalysis {
     typeof result.field_api_name !== "string" ||
     typeof result.assessment_summary !== "string"
   ) {
-    throw new Error("The field assessment proposal returned an invalid result.");
+    throw new Error(
+      "The field assessment proposal returned an invalid result.",
+    );
   }
 
   const usage = result.data_usage;
@@ -52,7 +55,9 @@ function getFieldAssessmentResults(proposal: Proposal): FieldAnalysis {
     typeof usage.usage_percentage !== "number" ||
     typeof usage.zero_usage_candidate !== "boolean"
   ) {
-    throw new Error("The field assessment proposal returned invalid usage data.");
+    throw new Error(
+      "The field assessment proposal returned invalid usage data.",
+    );
   }
 
   const referenceScan = result.reference_scan;
@@ -69,7 +74,9 @@ function getFieldAssessmentResults(proposal: Proposal): FieldAnalysis {
     typeof referenceScan.history_tracking_enabled !== "boolean" ||
     referenceGroups.some(([, references]) => !Array.isArray(references))
   ) {
-    throw new Error("The field assessment proposal returned invalid reference data.");
+    throw new Error(
+      "The field assessment proposal returned invalid reference data.",
+    );
   }
 
   const referenceScanErrors: string[] = [];
@@ -105,8 +112,7 @@ function getFieldAssessmentResults(proposal: Proposal): FieldAnalysis {
             : undefined;
       return [
         {
-          type:
-            typeof reference.type === "string" ? reference.type : category,
+          type: typeof reference.type === "string" ? reference.type : category,
           ...(typeof reference.id === "string" ? { id: reference.id } : {}),
           ...(name ? { name } : {}),
           ...(lineNumber !== undefined ? { line_number: lineNumber } : {}),
@@ -181,7 +187,9 @@ async function executeAnalysisProposal(
     }
   }
 
-  throw new Error("Field assessment proposal did not finish before the wait timed out.");
+  throw new Error(
+    `Assessment is still running after five minutes. Check proposal ${proposal.id} in Proposals before starting another analysis.`,
+  );
 }
 
 function toDependencies(references: SalesforceReferenceScan): Dependency[] {
@@ -195,24 +203,34 @@ function toDependencies(references: SalesforceReferenceScan): Dependency[] {
         : reference.type === "LightningComponentBundle"
           ? "User Interface"
           : "Business Logic",
-    referenceContext: [
-      reference.line_number ? `Line ${reference.line_number}` : "",
-      reference.snippet ?? reference.description ?? "",
-    ]
-      .filter(Boolean)
-      .join(": ") || "Reference found",
+    referenceContext:
+      [
+        reference.line_number ? `Line ${reference.line_number}` : "",
+        reference.snippet ?? reference.description ?? "",
+      ]
+        .filter(Boolean)
+        .join(": ") || "Reference found",
   }));
 }
 
-export default function DependencyViewerPage() {
-  const selectedObjectRef = useRef("");
+export default function DependencyViewerPage({
+  initialObject = "",
+  initialField = "",
+}: {
+  initialObject?: string;
+  initialField?: string;
+}) {
+  const selectedObjectRef = useRef(initialObject);
+  const requestedFieldRef = useRef(initialField);
   const [objects, setObjects] = useState<SalesforceObjectSummary[]>([]);
   const [object, setObject] = useState("");
   const [field, setField] = useState("");
   const [objectListLoading, setObjectListLoading] = useState(true);
   const [objectListError, setObjectListError] = useState<string | null>(null);
   const [objectListRevision, setObjectListRevision] = useState(0);
-  const [metadata, setMetadata] = useState<SalesforceObjectDescription | null>(null);
+  const [metadata, setMetadata] = useState<SalesforceObjectDescription | null>(
+    null,
+  );
   const [metadataLoading, setMetadataLoading] = useState(false);
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const [metadataRevision, setMetadataRevision] = useState(0);
@@ -224,30 +242,6 @@ export default function DependencyViewerPage() {
   const [submittingToolId, setSubmittingToolId] = useState<string | null>(null);
   const toolsSource = useApiResource<ToolDefinition[]>("/tools/", []);
   const toast = useToast();
-  const proposalTools = [
-    {
-      toolId: "salesforce_backup_field_def",
-      label: "Propose metadata backup",
-      description: "Create a Tier 2 proposal to snapshot this field.",
-      icon: Archive,
-      tone: "border-blue-500/25 bg-blue-500/[0.06] text-blue-200 hover:bg-blue-500/10",
-    },
-    {
-      toolId: "salesforce_deprecate_field",
-      label: "Propose deprecation",
-      description: "Submit a controlled field deprecation proposal.",
-      icon: WandSparkles,
-      tone: "border-amber-500/25 bg-amber-500/[0.06] text-amber-200 hover:bg-amber-500/10",
-    },
-    {
-      toolId: "salesforce_delete_field",
-      label: "Request deletion review",
-      description: "Create a Tier 3 proposal for human review.",
-      icon: ShieldAlert,
-      tone: "border-rose-500/25 bg-rose-500/[0.06] text-rose-200 hover:bg-rose-500/10",
-    },
-  ] as const;
-
   const submitFieldProposal = async (toolId: string, label: string) => {
     if (!object || !field || submittingToolId) return;
     if (toolId === "salesforce_delete_field" && !confirmDelete) {
@@ -267,9 +261,7 @@ export default function DependencyViewerPage() {
           object_name: object,
           field_name: field,
           field_api_name: field,
-          ...(proposalReason.trim()
-            ? { reason: proposalReason.trim() }
-            : {}),
+          ...(proposalReason.trim() ? { reason: proposalReason.trim() } : {}),
           ...(toolId === "salesforce_delete_field"
             ? { confirm_delete: true }
             : {}),
@@ -285,7 +277,9 @@ export default function DependencyViewerPage() {
       );
       toast.error(
         errorMessage,
-        alreadyPending ? "Already in Approval Queue" : "Proposal submission failed",
+        alreadyPending
+          ? "Already in Approval Queue"
+          : "Proposal submission failed",
       );
       setSubmittingToolId(null);
       return;
@@ -343,7 +337,9 @@ export default function DependencyViewerPage() {
           return;
         }
         if (current.status === "FAILED") {
-          throw new Error(current.error_message || `${label} execution failed.`);
+          throw new Error(
+            current.error_message || `${label} execution failed.`,
+          );
         }
         if (current.status !== "EXECUTING") {
           throw new Error(
@@ -377,12 +373,13 @@ export default function DependencyViewerPage() {
           .sort((left, right) => left.name.localeCompare(right.name));
         setObjects(nextObjects);
         const currentObject = selectedObjectRef.current;
-        const selectedObject = currentObject &&
+        const selectedObject =
+          currentObject &&
           nextObjects.some((item) => item.name === currentObject)
-          ? currentObject
-          : nextObjects.find((item) => item.name === "Account")?.name ??
-            nextObjects[0]?.name ??
-            "";
+            ? currentObject
+            : (nextObjects.find((item) => item.name === "Account")?.name ??
+              nextObjects[0]?.name ??
+              "");
         selectedObjectRef.current = selectedObject;
         setObject(selectedObject);
         setObjectListError(null);
@@ -402,7 +399,7 @@ export default function DependencyViewerPage() {
             : "Unable to load Salesforce objects.";
         setObjectListError(message);
         setObjectListLoading(false);
-      })
+      });
 
     return () => controller.abort();
   }, [objectListRevision]);
@@ -416,7 +413,13 @@ export default function DependencyViewerPage() {
       .then((description) => {
         if (controller.signal.aborted) return;
         setMetadata(description);
-        setField(description.fields[0]?.name ?? "");
+        const requestedField = requestedFieldRef.current;
+        setField(
+          description.fields.some((item) => item.name === requestedField)
+            ? requestedField
+            : (description.fields[0]?.name ?? ""),
+        );
+        requestedFieldRef.current = "";
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -452,7 +455,10 @@ export default function DependencyViewerPage() {
       setMetadataRevision((revision) => revision + 1);
     };
 
-    window.addEventListener("salesforce-field-deleted", refreshAfterFieldDeletion);
+    window.addEventListener(
+      "salesforce-field-deleted",
+      refreshAfterFieldDeletion,
+    );
     return () =>
       window.removeEventListener(
         "salesforce-field-deleted",
@@ -472,6 +478,7 @@ export default function DependencyViewerPage() {
   );
 
   const handleObjectChange = (nextObject: string) => {
+    setConfirmDelete(false);
     selectedObjectRef.current = nextObject;
     setObject(nextObject);
     setMetadata(null);
@@ -511,17 +518,20 @@ export default function DependencyViewerPage() {
     recordsPopulated: analysis
       ? `${analysis.usage.populated_records.toLocaleString()} / ${analysis.usage.total_records.toLocaleString()}`
       : null,
-    totalReferences: analysis?.references.reference_count ?? 0,
+    totalReferences: analysis?.references.reference_count ?? null,
     metadata: fieldMetadata,
     logs: analysis
       ? [
           `Population scan: ${analysis.usage.recommendation_hint}`,
           `Reference scan: ${analysis.references.summary}`,
           ...analysis.referenceScanErrors.map(
-            (scanError) => `Reference scan warning: ${scanError}`,
+            (scanError) =>
+              `${scanError.split(":")[0]} check incomplete. See assessment diagnostic details.`,
           ),
         ]
-      : ["Select a field and run an analysis to retrieve live usage and references."],
+      : [
+          "Select a field and run an analysis to retrieve live usage and references.",
+        ],
   };
 
   return (
@@ -534,219 +544,191 @@ export default function DependencyViewerPage() {
           Dependency Viewer
         </h1>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-          Inspect field metadata, data population, and references before making changes.
+          Inspect field metadata, data population, and references before making
+          changes.
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl shadow-black/10">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl shadow-black/10">
         <div className="min-w-0 space-y-5 p-4 sm:p-5">
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3.5 py-3 text-xs text-emerald-200">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
-              <span>Data is fetched directly from your Salesforce organization.</span>
-            </div>
+          <div className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3.5 text-xs sm:grid-cols-3">
+            {[
+              ["01", "Choose a target", "Select an object and field."],
+              [
+                "02",
+                "Inspect the evidence",
+                "Check population and references.",
+              ],
+              [
+                "03",
+                "Propose a change",
+                "Review tiers and approval requirements.",
+              ],
+            ].map(([step, title, description]) => (
+              <div key={step} className="flex min-w-0 gap-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 font-mono text-blue-300">
+                  {step}
+                </span>
+                <div>
+                  <p className="font-semibold text-slate-200">{title}</p>
+                  <p className="mt-1 text-slate-500">{description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
 
-            <FieldSelectSection
-              objects={objects.map((item) => item.name)}
+          <FieldSelectSection
+            objects={objects.map((item) => item.name)}
+            object={object}
+            field={field}
+            fields={fields}
+            loadingObjects={objectListLoading}
+            loadingFields={objectListLoading || metadataLoading}
+            analyzing={analysisLoading}
+            onObjectChange={handleObjectChange}
+            onFieldChange={(nextField) => {
+                setConfirmDelete(false);
+              setField(nextField);
+              setAnalysis(null);
+              setAnalysisError(null);
+            }}
+            onAnalyze={handleAnalyze}
+          />
+
+          {objectListError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-rose-500/20 bg-rose-500/[0.06] p-4 text-sm text-rose-200"
+            >
+              <p>Could not load Salesforce objects: {objectListError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setObjectListLoading(true);
+                  setObjectListError(null);
+                  setObjectListRevision((revision) => revision + 1);
+                }}
+                className="mt-2 rounded border border-rose-300/30 px-2 py-1 text-xs font-semibold hover:bg-rose-500/10"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {metadataError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-rose-500/20 bg-rose-500/[0.06] p-4 text-sm text-rose-200"
+            >
+              <p>
+                Could not load fields for {object}: {metadataError}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setMetadataLoading(true);
+                  setMetadataError(null);
+                  setMetadataRevision((revision) => revision + 1);
+                }}
+                className="mt-2 rounded border border-rose-300/30 px-2 py-1 text-xs font-semibold hover:bg-rose-500/10"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          <DetailSection detail={detail} />
+          {analysis && (
+            <AssessmentSummary
               object={object}
               field={field}
-              fields={fields}
-              loadingObjects={objectListLoading}
-              loadingFields={objectListLoading || metadataLoading}
-              analyzing={analysisLoading}
-              onObjectChange={handleObjectChange}
-              onFieldChange={(nextField) => {
-                setField(nextField);
-                setAnalysis(null);
-                setAnalysisError(null);
+              population={analysis.usage.usage_percentage}
+              references={analysis.references.reference_count}
+              hasReferences={analysis.references.has_references}
+              errors={analysis.referenceScanErrors}
+              summary={analysis.references.summary}
+              onExport={() => {
+                const url = URL.createObjectURL(
+                  new Blob(
+                    [
+                      JSON.stringify(
+                        {
+                          object,
+                          field,
+                          metadata: fieldMetadata,
+                          ...analysis,
+                          exported_at: new Date().toISOString(),
+                        },
+                        null,
+                        2,
+                      ),
+                    ],
+                    { type: "application/json" },
+                  ),
+                );
+                const anchor = document.createElement("a");
+                anchor.href = url;
+                anchor.download = `${object}.${field}.assessment.json`;
+                anchor.click();
+                window.setTimeout(() => URL.revokeObjectURL(url), 1000);
               }}
-              onAnalyze={handleAnalyze}
             />
-
-            {objectListError && (
-              <div role="alert" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.06] p-4 text-sm text-rose-200">
-                <p>Could not load Salesforce objects: {objectListError}</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setObjectListLoading(true);
-                    setObjectListError(null);
-                    setObjectListRevision((revision) => revision + 1);
-                  }}
-                  className="mt-2 rounded border border-rose-300/30 px-2 py-1 text-xs font-semibold hover:bg-rose-500/10"
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-
-            {metadataError && (
-              <div role="alert" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.06] p-4 text-sm text-rose-200">
-                <p>Could not load fields for {object}: {metadataError}</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMetadataLoading(true);
-                    setMetadataError(null);
-                    setMetadataRevision((revision) => revision + 1);
-                  }}
-                  className="mt-2 rounded border border-rose-300/30 px-2 py-1 text-xs font-semibold hover:bg-rose-500/10"
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-
-            {analysis || analysisError ? (
-              <>
-                <DependentTable
-                  dependencies={dependencies}
-                  error={analysisError ?? undefined}
+          )}
+          {analysis || analysisError ? (
+            <>
+              <DependentTable
+                dependencies={dependencies}
+                error={analysisError ?? undefined}
+              />
+              {analysis && (
+                <RemediationProposals
+                  object={object}
+                  field={field}
+                  custom={fieldMetadata?.custom === true}
+                  tools={toolsSource.data}
+                  loading={toolsSource.loading}
+                  error={toolsSource.error}
+                  submitting={submittingToolId}
+                  reason={proposalReason}
+                  confirmed={confirmDelete}
+                  onReasonChange={setProposalReason}
+                  onConfirmChange={setConfirmDelete}
+                  onRetry={toolsSource.reload}
+                  onSubmit={(toolId, label) =>
+                    void submitFieldProposal(toolId, label)
+                  }
                 />
-                {analysis && (
-                  <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 sm:p-5">
-                  <div className="mb-4">
-                    <p className="text-sm font-semibold text-slate-100">
-                      Remediation proposals
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-slate-400">
-                      Submit an action for {object}.{field}. Policy-approved
-                      Tier 2 actions execute after proposal creation; Tier 3
-                      deletion requests wait for human approval.
-                    </p>
-                  </div>
-                  <label className="mb-4 block">
-                    <span className="mb-1.5 block text-xs font-medium text-slate-300">
-                      Reason for the proposed change
-                      <span className="ml-1 font-normal text-slate-500">
-                        (optional)
-                      </span>
-                    </span>
-                    <textarea
-                      value={proposalReason}
-                      onChange={(event) => setProposalReason(event.target.value)}
-                      maxLength={500}
-                      rows={2}
-                      disabled={submittingToolId !== null}
-                      placeholder="Add context for the reviewer…"
-                      className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 outline-none transition focus:border-blue-500 disabled:opacity-50"
-                    />
-                  </label>
-                  {toolsSource.data.some(
-                    (tool) => tool.tool_id === "salesforce_delete_field",
-                  ) && (
-                    <label className="mb-4 flex items-start gap-2.5 rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-3 text-xs text-rose-100">
-                      <input
-                        type="checkbox"
-                        checked={confirmDelete}
-                        onChange={(event) =>
-                          setConfirmDelete(event.target.checked)
-                        }
-                        disabled={submittingToolId !== null}
-                        className="mt-0.5 accent-rose-500"
-                      />
-                      <span>
-                        I understand that deletion is permanent and that the
-                        metadata backup does not restore the field or its data.
-                        The request will still require human approval.
-                      </span>
-                    </label>
-                  )}
-                  {toolsSource.error && (
-                    <p role="alert" className="mb-3 text-xs text-rose-300">
-                      Unable to load registered tool tiers: {toolsSource.error}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap gap-2">
-                    {proposalTools.map(({ toolId, label, description, icon: Icon, tone }) => {
-                      const tool = toolsSource.data.find(
-                        (registeredTool) => registeredTool.tool_id === toolId,
-                      );
-                      if (!tool) return null;
-                      return (
-                        <button
-                          key={toolId}
-                          type="button"
-                          disabled={
-                            submittingToolId !== null ||
-                            toolsSource.loading ||
-                            !fieldMetadata ||
-                            (toolId === "salesforce_deprecate_field" &&
-                              !fieldMetadata.custom) ||
-                            (toolId === "salesforce_delete_field" &&
-                              (!confirmDelete || !fieldMetadata.custom))
-                          }
-                          onClick={() => void submitFieldProposal(toolId, label)}
-                          title={description}
-                          className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50 ${tone}`}
-                        >
-                          {submittingToolId === toolId ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Icon className="h-3.5 w-3.5" />
-                          )}
-                          {label}
-                          <span className="rounded bg-black/20 px-1.5 py-0.5 text-[10px]">
-                            {tool.tier}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {fieldMetadata && !fieldMetadata.custom && (
-                    <p className="mt-3 text-xs leading-5 text-amber-200/80">
-                      Deprecation is available only for custom fields. Select
-                      a custom field to submit this proposal.
-                    </p>
-                  )}
-                  {toolsSource.data.some(
-                    (tool) => tool.tool_id === "salesforce_delete_field",
-                  ) && (
-                    <p className="mt-3 text-xs leading-5 text-amber-200/80">
-                      Deletion is limited to unmanaged custom fields. It creates
-                      a metadata backup first, but does not archive existing
-                      records or automatically restore the deleted field.
-                    </p>
-                  )}
-                  {!toolsSource.loading && proposalTools.every(
-                    ({ toolId }) =>
-                      !toolsSource.data.some((tool) => tool.tool_id === toolId),
-                  ) && (
-                    <p className="mt-3 text-xs text-slate-500">
-                      No Tier 2 or Tier 3 field-remediation tools are registered
-                      by the control plane.
-                    </p>
-                  )}
-                  </section>
-                )}
-              </>
-            ) : (
-              <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 px-5 py-10 text-center">
-                {analysisLoading ? (
-                  <>
-                    <span className="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-400/20 border-t-blue-400" />
-                    <h2 className="text-sm font-semibold text-slate-200">
-                      Analyzing {object}.{field}
-                    </h2>
-                    <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
-                      Checking record population and Salesforce code and metadata references.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <span className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-700 bg-slate-900 text-slate-400">
-                      <span className="text-lg">⌕</span>
-                    </span>
-                    <h2 className="text-sm font-semibold text-slate-200">
-                      Ready to inspect dependencies
-                    </h2>
-                    <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
-                      Choose a field above and run an analysis to see its live references.
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
-            <DetailSection detail={detail} />
+              )}
+            </>
+          ) : (
+            <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 px-5 py-10 text-center">
+              {analysisLoading ? (
+                <>
+                  <span className="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-400/20 border-t-blue-400" />
+                  <h2 className="text-sm font-semibold text-slate-200">
+                    Analyzing {object}.{field}
+                  </h2>
+                  <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
+                    Checking record population and Salesforce code and metadata
+                    references.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <span className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-700 bg-slate-900 text-slate-400">
+                    <span className="text-lg">⌕</span>
+                  </span>
+                  <h2 className="text-sm font-semibold text-slate-200">
+                    Ready to inspect dependencies
+                  </h2>
+                  <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
+                    Choose a field above and run an analysis to see its live
+                    references.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

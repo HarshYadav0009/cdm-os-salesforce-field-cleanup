@@ -112,7 +112,7 @@ export default function FieldSelectSection({
 
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-800 pt-3 text-xs">
         <span className="text-slate-500">Selected target</span>
-        <span className="rounded-md border border-slate-700 bg-slate-950/70 px-2 py-1 font-mono text-slate-300">
+        <span className="min-w-0 break-all rounded-md border border-slate-700 bg-slate-950/70 px-2 py-1 font-mono text-slate-300">
           {object || "Object"}.{field || "Field"}
         </span>
         {fields.length > 0 && !loadingFields && (

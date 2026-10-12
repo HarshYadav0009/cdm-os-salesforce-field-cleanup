@@ -294,6 +294,47 @@ class SalesforceClient:
 
         raise ValueError(f"SObject '{object_name}' not found in Salesforce org.")
 
+    def read_object_metadata(self, object_name: str) -> Dict[str, Any]:
+        """Read validation rules and compact layouts from object metadata."""
+        from .validators import validate_salesforce_identifier
+        object_name = validate_salesforce_identifier(object_name)
+        cache = getattr(self, "_object_metadata_cache", {})
+        if object_name not in cache:
+            if self._mock_mode:
+                cache[object_name] = self.describe(object_name)
+            else:
+                from zeep.helpers import serialize_object
+                metadata = serialize_object(self.sf.mdapi.CustomObject.read([object_name]))
+                if not isinstance(metadata, dict) or not metadata.get("fullName"):
+                    raise ValueError(f"Object metadata was not returned for {object_name}")
+                cache[object_name] = metadata
+            self._object_metadata_cache = cache
+        return cache[object_name]
+
+    def read_page_layouts(self, object_name: str) -> List[Dict[str, Any]]:
+        """Retrieve each object layout's metadata using a single-record query."""
+        from .validators import validate_salesforce_identifier
+        object_name = validate_salesforce_identifier(object_name)
+        if self._mock_mode:
+            return self.describe(object_name).get("pageLayouts", [])
+        object_id = object_name
+        if object_name.endswith("__c"):
+            records = self.tooling_query(f"SELECT DurableId FROM EntityDefinition WHERE QualifiedApiName = '{object_name}'").get("records", [])
+            if not records:
+                raise ValueError(f"Object definition was not returned for {object_name}")
+            object_id = records[0]["DurableId"]
+        records = self.tooling_query(f"SELECT Id, Name FROM Layout WHERE TableEnumOrId = '{object_id}'").get("records", [])
+        layouts = []
+        for record in records:
+            layout_id = record["Id"]
+            if not re.fullmatch(r"[A-Za-z0-9]{15,18}", layout_id):
+                raise ValueError("Invalid layout identifier returned by Salesforce")
+            detail = self.tooling_query(f"SELECT Metadata FROM Layout WHERE Id = '{layout_id}' LIMIT 1").get("records", [])
+            if not detail or not isinstance(detail[0].get("Metadata"), dict):
+                raise ValueError(f"Layout metadata was not returned for {record['Name']}")
+            layouts.append({"name": record["Name"], "metadata": detail[0]["Metadata"]})
+        return layouts
+
     def describe_global(self) -> Dict[str, Any]:
         """Return global list of all SObjects."""
         if not self._mock_mode and self.sf:

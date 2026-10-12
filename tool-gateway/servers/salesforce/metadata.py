@@ -45,6 +45,8 @@ class SalesforceMetadataService:
                 "updateable": field.get("updateable"),
                 "calculated": field.get("calculated", False),
                 "custom": field.get("custom", False),
+                "filterable": field.get("filterable"),
+                "encrypted": field.get("encrypted"),
                 "description": field.get("description", "")
             })
 

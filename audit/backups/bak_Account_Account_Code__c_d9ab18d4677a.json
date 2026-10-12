@@ -1,0 +1,24 @@
+{
+  "backup_id": "bak_Account_Account_Code__c_d9ab18d4677a",
+  "created_at": "2026-10-12T09:58:30.222278+00:00",
+  "object_name": "Account",
+  "field_name": "Account_Code__c",
+  "metadata": {
+    "name": "Account_Code__c",
+    "label": "Account Code",
+    "type": "string",
+    "length": 30,
+    "precision": 0,
+    "scale": 0,
+    "nillable": false,
+    "createable": false,
+    "updateable": false,
+    "calculated": false,
+    "custom": true,
+    "filterable": true,
+    "encrypted": false,
+    "description": ""
+  },
+  "description": "",
+  "checksum": "981631445b11ffd13a620b039de7b32d2efc0d2bc83bba6c660d89ab70e2e5ef"
+}

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./light-theme.css";
 
 :root {
   color-scheme: dark;
@@ -46,68 +47,4 @@ select:focus-visible {
 
 ::selection {
   background: rgb(59 130 246 / 35%);
-}
-
-html[data-theme="light"] {
-  color-scheme: light;
-  --background: #f1f5f9;
-  --foreground: #1e293b;
-}
-
-html[data-theme="light"] body {
-  background: var(--background);
-  color: var(--foreground);
-}
-
-html[data-theme="light"] [class*="bg-[#111319]"],
-html[data-theme="light"] [class*="bg-[#080d18]"] {
-  background-color: #f1f5f9 !important;
-}
-
-html[data-theme="light"] [class*="bg-[#0D1C42]"] {
-  background-color: #ffffff !important;
-}
-
-html[data-theme="light"] [class*="bg-slate-950"] {
-  background-color: #f8fafc !important;
-}
-
-html[data-theme="light"] [class*="bg-slate-900"] {
-  background-color: #ffffff !important;
-}
-
-html[data-theme="light"] [class*="bg-slate-800"] {
-  background-color: #e2e8f0 !important;
-}
-
-html[data-theme="light"] [class*="bg-slate-700"] {
-  background-color: #cbd5e1 !important;
-}
-
-html[data-theme="light"] [class*="text-white"],
-html[data-theme="light"] [class*="text-slate-100"],
-html[data-theme="light"] [class*="text-slate-200"] {
-  color: #0f172a !important;
-}
-
-html[data-theme="light"] [class*="text-slate-300"] {
-  color: #334155 !important;
-}
-
-html[data-theme="light"] [class*="text-slate-400"] {
-  color: #475569 !important;
-}
-
-html[data-theme="light"] [class*="text-slate-500"],
-html[data-theme="light"] [class*="text-slate-600"] {
-  color: #64748b !important;
-}
-
-html[data-theme="light"] [class*="border-slate-800"],
-html[data-theme="light"] [class*="border-slate-700"] {
-  border-color: #cbd5e1 !important;
-}
-
-html[data-theme="light"] [class*="hover:bg-slate-800"]:hover {
-  background-color: #e2e8f0 !important;
 }

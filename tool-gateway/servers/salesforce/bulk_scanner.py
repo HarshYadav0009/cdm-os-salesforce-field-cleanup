@@ -10,6 +10,19 @@ from .apex_scanner import SalesforceApexScanner
 logger = logging.getLogger("salesforce.bulk_scanner")
 
 
+class _ReferenceReadCache:
+    """Reuse source metadata within one bulk run, without caching failures."""
+
+    def __init__(self, client):
+        self.client = client
+        self.results = {}
+
+    def tooling_query(self, soql):
+        if soql not in self.results:
+            self.results[soql] = self.client.tooling_query(soql)
+        return self.results[soql]
+
+
 class SalesforceBulkScanner:
     """
     Bulk Scanner across standard CRM objects (Account, Contact, Opportunity)
@@ -29,7 +42,8 @@ class SalesforceBulkScanner:
         self.client = client if client is not None else SalesforceClient()
         self.metadata = metadata_service if metadata_service else SalesforceMetadataService(self.client)
         self.usage = usage_service if usage_service else SalesforceFieldUsageService(self.client)
-        self.scanner = apex_scanner if apex_scanner else SalesforceApexScanner(self.client)
+        self.reference_cache = _ReferenceReadCache(self.client)
+        self.scanner = apex_scanner if apex_scanner else SalesforceApexScanner(self.reference_cache)
 
     def scan_objects(
         self,
@@ -39,6 +53,7 @@ class SalesforceBulkScanner:
         """
         Execute full bulk scan across specified SObjects.
         """
+        self.reference_cache.results.clear()
         if not object_names:
             # Auto-discover or use defaults
             try:
@@ -55,6 +70,8 @@ class SalesforceBulkScanner:
         candidates = []
         needs_review = []
         active_fields = []
+        skipped_fields = []
+        object_errors = []
         breakdown_by_object = {}
 
         total_custom_fields = 0
@@ -64,23 +81,49 @@ class SalesforceBulkScanner:
                 desc = self.metadata.describe_object(obj_name)
             except Exception as e:
                 logger.warning(f"Could not describe object {obj_name}: {e}")
+                object_errors.append({"object": obj_name, "stage": "metadata", "reason": str(e)})
                 continue
 
             custom_fields = [f for f in desc.get("fields", []) if f.get("custom")]
             total_custom_fields += len(custom_fields)
 
-            total_records = self.usage.get_total_records(obj_name)
+            try:
+                total_records = self.usage.get_total_records(obj_name)
+            except Exception as e:
+                object_errors.append({"object": obj_name, "stage": "record_count", "reason": str(e)})
+                logger.warning(f"Could not count records for {obj_name}: {e}")
+                continue
             obj_candidates = []
             obj_needs_review = []
             obj_active = []
+            obj_skipped = []
 
             for f in custom_fields:
                 f_name = f["name"]
-                pop_count = self.usage.get_populated_records(obj_name, f_name)
-                usage_pct = self.usage.calculate_usage(total_records, pop_count)
-
-                # Check references
-                ref_res = self.scanner.scan_all_references(obj_name, f_name)
+                skipped = {
+                    "object": obj_name, "field": f_name,
+                    "label": f.get("label"), "type": f.get("type"),
+                    "classification": "NOT_ASSESSED",
+                }
+                # Describe metadata determines whether a WHERE population query is supported.
+                # Classic encrypted fields are also excluded when older metadata lacks this flag.
+                if f.get("filterable") is False or f.get("type") == "encryptedstring":
+                    skipped.update({"stage": "population", "reason": "Salesforce does not allow filtering this field; population could not be assessed."})
+                    skipped_fields.append(skipped)
+                    obj_skipped.append(skipped)
+                    continue
+                stage = "population"
+                try:
+                    pop_count = self.usage.get_populated_records(obj_name, f_name)
+                    usage_pct = self.usage.calculate_usage(total_records, pop_count)
+                    stage = "references"
+                    ref_res = self.scanner.scan_all_references(obj_name, f_name)
+                except Exception as e:
+                    skipped.update({"stage": stage, "reason": str(e)})
+                    skipped_fields.append(skipped)
+                    obj_skipped.append(skipped)
+                    logger.warning(f"Could not assess {obj_name}.{f_name} ({stage}): {e}")
+                    continue
                 has_refs = ref_res["has_references"]
 
                 item = {
@@ -102,7 +145,7 @@ class SalesforceBulkScanner:
                     obj_candidates.append(item)
                 elif usage_pct <= threshold_percentage and has_refs:
                     item["classification"] = "NEEDS_REVIEW_HAS_DEPENDENCIES"
-                    item["warning"] = "0% populated, but referenced in Salesforce code or flows!"
+                    item["warning"] = f"{usage_pct}% populated, but referenced in Salesforce code or flows!"
                     needs_review.append(item)
                     obj_needs_review.append(item)
                 else:
@@ -116,13 +159,16 @@ class SalesforceBulkScanner:
                 "candidates_count": len(obj_candidates),
                 "needs_review_count": len(obj_needs_review),
                 "active_count": len(obj_active),
+                "skipped_count": len(obj_skipped),
             }
 
         return {
+            "threshold_percentage": threshold_percentage,
             "scan_timestamp": datetime.now(timezone.utc).isoformat(),
             "objects_scanned": object_names,
             "total_objects_scanned": len(object_names),
-            "total_custom_fields_scanned": total_custom_fields,
+            "total_custom_fields_scanned": len(candidates) + len(needs_review) + len(active_fields),
+            "total_custom_fields_discovered": total_custom_fields,
             "total_candidates_found": len(candidates),
             "total_needs_review": len(needs_review),
             "total_active_in_use": len(active_fields),
@@ -130,4 +176,8 @@ class SalesforceBulkScanner:
             "candidates": candidates,
             "needs_review": needs_review,
             "active_fields": active_fields,
+            "total_skipped_fields": len(skipped_fields),
+            "skipped_fields": skipped_fields,
+            "object_errors": object_errors,
+            "partial_scan": bool(skipped_fields or object_errors),
         }

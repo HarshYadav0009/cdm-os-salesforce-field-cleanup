@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     MCP_GATEWAY_PORT: int = 8080
     MCP_GATEWAY_URL: str = "http://127.0.0.1:8080"
     MCP_REQUEST_TIMEOUT_SEC: int = 30
+    FIELD_ASSESSMENT_TIMEOUT_SEC: int = 180
 
     # ── Audit ─────────────────────────────────────────────────
     AUDIT_HMAC_SECRET: str = "hmac-signing-key-for-audit-trail"

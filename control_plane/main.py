@@ -79,6 +79,7 @@ async def lifespan(app: FastAPI):
                 ("salesforce_backup_field_def", "Backup Field Definition", "Create a metadata snapshot before changing a custom field", ToolTier.TIER_2),
                 ("salesforce_deprecate_field", "Deprecate Custom Field", "Back up and mark a custom field description as deprecated; leaves field access unchanged", ToolTier.TIER_2),
                 ("salesforce_delete_field", "Delete Custom Field", "Permanently delete custom field", ToolTier.TIER_3),
+                ("salesforce_rollback_field", "Restore Field Description", "Restore a field description from a backup; does not restore deleted fields or record data", ToolTier.TIER_2),
             ]
             for tool_id, name, desc, tier in tools_to_seed:
                 if not db.query(ToolDefinition).filter(ToolDefinition.tool_id == tool_id).first():

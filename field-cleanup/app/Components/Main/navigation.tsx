@@ -20,6 +20,7 @@ import ProposalsPage from "../Proposals/ProposalsPage";
 import AuditLogPage from "../AuditLog/AuditLogPage";
 import SettingsPage from "../Settings/SettingsPage";
 import DependencyViewerPage from "../DependencyViewer/DependencyViewerPage";
+import FieldToolsPage from "../FieldTools/FieldToolsPage";
 import {
   AgentsPage,
   BoardroomPage,
@@ -36,6 +37,7 @@ export const NAV_IDS = [
   "ApprovalQueue",
   "Proposals",
   "DependencyViewer",
+  "FieldTools",
   "AuditLog",
   "PolicyManager",
   "DigitalBoardroom",
@@ -60,6 +62,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "ApprovalQueue",    label: "Approval Queue",     icon: Users,             Component: ApprovalQueuePage },
   { id: "Proposals",        label: "Proposals",          icon: ClipboardList,     Component: ProposalsPage },
   { id: "DependencyViewer", label: "Dependency Viewer", icon: Search,             Component: DependencyViewerPage },
+  { id: "FieldTools",       label: "Field Tools",        icon: Activity,           Component: FieldToolsPage },
   { id: "AuditLog",         label: "Audit Trail",         icon: FileText,          Component: AuditLogPage },
   { id: "PolicyManager",    label: "Policy Manager",     icon: ShieldCheck,       Component: PolicyPage },
   { id: "DigitalBoardroom", label: "Digital Boardroom",  icon: Scale,             Component: BoardroomPage },

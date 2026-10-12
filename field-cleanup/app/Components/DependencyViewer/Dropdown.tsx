@@ -124,8 +124,26 @@ export default function Dropdown({
                 <li
                   key={option}
                   role="option"
+                  tabIndex={0}
                   aria-selected={option === value}
                   onClick={() => select(option)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      select(option);
+                      ref.current?.querySelector("button")?.focus();
+                    } else if (
+                      event.key === "ArrowDown" ||
+                      event.key === "ArrowUp"
+                    ) {
+                      event.preventDefault();
+                      const sibling =
+                        event.key === "ArrowDown"
+                          ? event.currentTarget.nextElementSibling
+                          : event.currentTarget.previousElementSibling;
+                      if (sibling instanceof HTMLElement) sibling.focus();
+                    }
+                  }}
                   className={[
                     "cursor-pointer rounded-lg px-3 py-2.5 text-sm transition-colors",
                     option === value
