@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
+import AuditReportControls, { type VerificationStatus } from "./AuditReportControls";
 import AuditHeadSection from "./AuditHeadSection";
 import type { AuditInfoCard, AuditLog } from "./types";
 import { useApiResource } from "@/app/lib/api/useApiResource";
 import type { AuditLogEntry } from "@/types/governance";
 import { SourceNotice } from "@/app/Components/Governance/GovernancePages";
+import { usePolling } from "@/app/lib/api/usePolling";
 import { useRealtime } from "@/app/lib/ws/RealtimeProvider";
 
 function toAuditLog(entry: AuditLogEntry): AuditLog {
@@ -33,8 +35,10 @@ function toAuditLog(entry: AuditLogEntry): AuditLog {
 export default function AuditLogPage() {
   const source = useApiResource<AuditLogEntry[]>("/audit/?limit=500", []);
   const { reload } = source;
+  usePolling(reload);
   const { subscribe } = useRealtime();
-  const logs = useMemo(() => source.data.map(toAuditLog), [source.data]);
+  const [verification, setVerification] = useState<Record<string, VerificationStatus>>({});
+  const logs = useMemo(() => source.data.map((entry) => ({ ...toAuditLog(entry), hmacStatus: verification[entry.id] ?? (entry.hmac_signature ? "Present" : "Missing") })), [source.data, verification]);
   const [search, setSearch] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
   const [dateRange, setDateRange] = useState("");
@@ -112,6 +116,7 @@ export default function AuditLogPage() {
     <div className="space-y-2">
       <h1 className="p-1 text-xl font-bold sm:text-2xl">Audit Log</h1>
 
+      <AuditReportControls entries={filteredLogs.map((log) => source.data.find((entry) => entry.id === log.id)!)} verification={verification} onVerified={(next) => setVerification((current) => ({ ...current, ...next }))} />
       <div className="rounded-lg border border-slate-700 bg-slate-900">
         <SourceNotice loading={source.loading} error={source.error} reload={source.reload} />
         <AuditHeadSection

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+import FieldEvidence from "./FieldEvidence";
 import type { QueueRow } from "./QueueTable";
 
 interface RiskAssessmentModalProps {
@@ -41,7 +42,17 @@ export default function RiskAssessmentModal({
   useEffect(() => {
     if (!isOpen) return;
 
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key !== "Tab") return;
+      const controls = panelRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, [tabindex="0"]');
+      if (!controls?.length) return;
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || document.activeElement === panelRef.current)) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener("keydown", onKey);
 
     const prevOverflow = document.body.style.overflow;
@@ -53,6 +64,7 @@ export default function RiskAssessmentModal({
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
+      previousFocus?.focus();
     };
   }, [isOpen, onClose]);
 
@@ -88,7 +100,7 @@ export default function RiskAssessmentModal({
         ref={panelRef}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-700 bg-slate-900 text-slate-300 outline-none sm:max-h-[90vh] sm:rounded-lg"
+        className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-slate-700 bg-slate-900 text-slate-300 outline-none sm:max-h-[90vh] sm:rounded-lg"
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b border-slate-700 p-4">
@@ -166,6 +178,7 @@ export default function RiskAssessmentModal({
               </p>
             )}
           </section>
+          <FieldEvidence key={row.id} payload={row.proposal.input_payload} />
           <section>
             <label
               htmlFor="reviewer-email"
@@ -221,7 +234,7 @@ export default function RiskAssessmentModal({
                   Approve Remediation
                 </span>
                 <span className="mt-0.5 text-xs text-blue-200">
-                  (Releases Token)
+                  (Approve and dispatch)
                 </span>
               </button>
 
@@ -235,7 +248,7 @@ export default function RiskAssessmentModal({
                   Reject Proposal
                 </span>
                 <span className="mt-0.5 text-xs text-slate-400">
-                  (Rollback Workflow)
+                  (No execution)
                 </span>
               </button>
             </>

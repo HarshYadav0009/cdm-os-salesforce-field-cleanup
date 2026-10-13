@@ -1,21 +1,11 @@
 "use client";
 
-import {
-  Activity,
-  AlertTriangle,
-  Braces,
-  Database,
-  Layers3,
-} from "lucide-react";
+import { Braces, Database } from "lucide-react";
 import type { SalesforceFieldMetadata } from "@/app/lib/api/salesforce";
 
 export interface FieldDetail {
   fieldLabel: string;
   dataType: string;
-  usagePercent: number | null;
-  recordsPopulated: string | null;
-  totalReferences: number | null;
-  logs: string[];
   metadata: SalesforceFieldMetadata | null;
 }
 
@@ -27,10 +17,6 @@ export default function DetailSection({ detail }: DetailSectionProps) {
   const {
     fieldLabel,
     dataType,
-    usagePercent,
-    recordsPopulated,
-    totalReferences,
-    logs,
     metadata,
   } = detail;
 
@@ -57,27 +43,7 @@ export default function DetailSection({ detail }: DetailSectionProps) {
         </div>
       </header>
 
-      <div className="grid gap-4 p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.2fr)_minmax(0,1fr)]">
-        <div className="grid grid-cols-2 gap-2 self-start">
-          <StatCard
-            icon={Activity}
-            label="Populated"
-            value={usagePercent === null ? "—" : `${usagePercent}%`}
-            detail={recordsPopulated ?? "Run analysis"}
-            warning={usagePercent === 0}
-          />
-          <StatCard
-            icon={Layers3}
-            label="References"
-            value={totalReferences === null ? "—" : String(totalReferences)}
-            detail={
-              totalReferences === null
-                ? "Run analysis"
-                : "Across code & metadata"
-            }
-          />
-        </div>
-
+      <div className="p-4 sm:p-5">
         <section className="min-w-0">
           <div className="mb-2 flex items-center gap-2">
             <Database className="h-3.5 w-3.5 text-slate-500" />
@@ -86,7 +52,7 @@ export default function DetailSection({ detail }: DetailSectionProps) {
             </h3>
           </div>
           {metadata ? (
-            <dl className="divide-y divide-slate-800 rounded-xl border border-slate-800 bg-slate-950/50 px-3">
+            <dl className="grid gap-x-6 rounded-xl border border-slate-800 bg-slate-950/50 px-3 sm:grid-cols-2">
               <MetadataRow label="API name" value={metadata.name} mono />
               <MetadataRow label="Nullable" value={yesNo(metadata.nillable)} />
               <MetadataRow
@@ -111,7 +77,7 @@ export default function DetailSection({ detail }: DetailSectionProps) {
                 />
               )}
               {metadata.description && (
-                <div className="py-2.5">
+                <div className="border-t border-slate-800 py-2.5 sm:col-span-2">
                   <dt className="text-[10px] font-medium text-slate-500">
                     Description
                   </dt>
@@ -128,62 +94,8 @@ export default function DetailSection({ detail }: DetailSectionProps) {
           )}
         </section>
 
-        <section className="min-w-0">
-          <div className="mb-2 flex items-center gap-2">
-            <Activity className="h-3.5 w-3.5 text-slate-500" />
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-              Analysis notes
-            </h3>
-          </div>
-          <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-            {logs.map((log, index) => (
-              <p
-                key={`${index}-${log}`}
-                className="flex gap-2 text-xs leading-5 text-slate-400"
-              >
-                {usagePercent === 0 ? (
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
-                ) : (
-                  <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-blue-400" />
-                )}
-                <span className="min-w-0 break-words">{log}</span>
-              </p>
-            ))}
-          </div>
-        </section>
       </div>
     </aside>
-  );
-}
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  detail,
-  warning = false,
-}: {
-  icon: typeof Activity;
-  label: string;
-  value: string;
-  detail: string;
-  warning?: boolean;
-}) {
-  return (
-    <div className="min-w-0 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-      <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
-        <Icon className="h-3.5 w-3.5" />
-        {label}
-      </div>
-      <p
-        className={`mt-2 truncate text-xl font-semibold tabular-nums ${warning ? "text-amber-300" : "text-slate-100"}`}
-      >
-        {value}
-      </p>
-      <p className="mt-1 truncate text-[10px] text-slate-500" title={detail}>
-        {detail}
-      </p>
-    </div>
   );
 }
 
@@ -197,7 +109,7 @@ function MetadataRow({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5">
+    <div className="flex items-center justify-between gap-3 border-b border-slate-800 py-2.5">
       <dt className="text-[10px] font-medium text-slate-500">{label}</dt>
       <dd
         className={`min-w-0 break-words text-right text-[11px] text-slate-300 [overflow-wrap:anywhere] ${mono ? "font-mono" : ""}`}

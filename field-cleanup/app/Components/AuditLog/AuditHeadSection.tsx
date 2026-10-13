@@ -28,8 +28,8 @@ interface AuditHeadSectionProps {
 }
 
 export default function AuditHeadSection({
-  title = "Cryptographically Verified Audit Trail",
-  description = "Audit events returned by the control plane, including their HMAC signatures. Signature verification is not exposed by the current API.",
+  title = "Audit Trail & Integrity",
+  description = "Review audit events, verify their payload signatures, and export the filtered report.",
   search,
   onSearchChange,
   dateRange,

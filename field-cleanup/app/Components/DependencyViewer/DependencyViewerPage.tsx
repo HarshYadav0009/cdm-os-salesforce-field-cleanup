@@ -514,24 +514,7 @@ export default function DependencyViewerPage({
       ? `${metadata?.label ?? object}: ${fieldMetadata.label}`
       : `${object || "Salesforce object"}: ${field || "—"}`,
     dataType: fieldMetadata?.type ?? "—",
-    usagePercent: analysis?.usage.usage_percentage ?? null,
-    recordsPopulated: analysis
-      ? `${analysis.usage.populated_records.toLocaleString()} / ${analysis.usage.total_records.toLocaleString()}`
-      : null,
-    totalReferences: analysis?.references.reference_count ?? null,
     metadata: fieldMetadata,
-    logs: analysis
-      ? [
-          `Population scan: ${analysis.usage.recommendation_hint}`,
-          `Reference scan: ${analysis.references.summary}`,
-          ...analysis.referenceScanErrors.map(
-            (scanError) =>
-              `${scanError.split(":")[0]} check incomplete. See assessment diagnostic details.`,
-          ),
-        ]
-      : [
-          "Select a field and run an analysis to retrieve live usage and references.",
-        ],
   };
 
   return (

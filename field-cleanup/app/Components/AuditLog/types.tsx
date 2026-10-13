@@ -1,4 +1,4 @@
-export type HmacStatus = "Present" | "Missing";
+export type HmacStatus = "Present" | "Missing" | "Verified" | "Invalid" | "Not found";
 
 export type RiskTier = string;
 

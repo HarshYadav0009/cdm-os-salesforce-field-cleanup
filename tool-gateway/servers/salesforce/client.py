@@ -378,6 +378,11 @@ class SalesforceClient:
 
     def update_field_description(self, object_name: str, field_name: str, new_description: str) -> bool:
         """Update field description (used for deprecation tagging)."""
+        if not field_name.endswith("__c"):
+            raise ValueError(
+                "Description updates require a custom field ending in __c. "
+                "Person Account __pc fields must be reviewed on their underlying Contact field."
+            )
         if not self._mock_mode and self.sf:
             full_name = f"{object_name}.{field_name}"
             metadata = self.sf.mdapi.CustomField.read([full_name])
