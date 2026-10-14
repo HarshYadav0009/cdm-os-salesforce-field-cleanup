@@ -51,12 +51,10 @@ export default function ObjectSelectionPage() {
     );
   };
 
-  const toggleAll = () => {
-    setSelectedIds((prev) =>
-      prev.length === filteredObjects.length
-        ? []
-        : filteredObjects.map((o) => o.id)
-    );
+  const toggleAll = (ids: string[], checked: boolean) => {
+    setSelectedIds((previous) => checked
+      ? Array.from(new Set([...previous, ...ids]))
+      : previous.filter((id) => !ids.includes(id)));
   };
 
   const handleInitiate = () => {

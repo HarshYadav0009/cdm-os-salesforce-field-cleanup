@@ -2,6 +2,16 @@
 
 > **Architecture Reference: Layer 1 — Human & Governance Layer**
 
+The implemented Next.js dashboard is in [`field-cleanup/`](./field-cleanup/README.md). From the repository root, run:
+
+```sh
+cd frontend/field-cleanup
+npm ci
+npm run dev
+```
+
+The feature list below describes the broader governance dashboard plan.
+
 ## Why This Folder Exists
 
 Humans (Guardians, Skill Leads, AIGB members) need a visual interface to:

@@ -1,4 +1,5 @@
 "use client";
+import TablePagination, { useTablePagination } from "@/app/Components/shared/TablePagination";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -251,6 +252,7 @@ function RegisteredToolsPanel({
   loading?: boolean;
   error?: string | null;
 }) {
+  const pagination = useTablePagination(tools);
   const getTierClasses = (tier: ToolDefinition["tier"]) => {
     if (tier === "Tier-1") {
       return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
@@ -325,7 +327,7 @@ function RegisteredToolsPanel({
                 </td>
               </tr>
             ) : (
-              tools.map((tool) => (
+              pagination.visibleRows.map((tool) => (
                 <tr
                   key={tool.id}
                   className="align-middle hover:bg-slate-800/40"
@@ -365,6 +367,7 @@ function RegisteredToolsPanel({
           </tbody>
         </table>
       </div>
+      <TablePagination {...pagination} label="Tool pagination" />
     </section>
   );
 }
@@ -378,7 +381,9 @@ function AgentTable({
   onSelect?: (agent: Agent) => void;
   selectedId?: string;
 }) {
+  const pagination = useTablePagination(rows);
   return (
+    <div>
     <div className="overflow-x-auto">
       <table className="w-full min-w-[680px] text-left text-sm">
         <thead className="text-[11px] uppercase tracking-wider text-slate-500">
@@ -391,7 +396,7 @@ function AgentTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800">
-          {rows.map((agent) => (
+          {pagination.visibleRows.map((agent) => (
             <tr
               key={agent.id}
               onClick={onSelect ? () => onSelect(agent) : undefined}
@@ -439,6 +444,8 @@ function AgentTable({
           ))}
         </tbody>
       </table>
+    </div>
+    <TablePagination {...pagination} label="Agent pagination" />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
+import TablePagination, { useTablePagination } from "@/app/Components/shared/TablePagination";
 
-import { ArrowUp, ArrowDown, Lock, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { ArrowUp, ArrowDown, Lock, AlertTriangle, Copy, Check, ShieldQuestion } from "lucide-react";
 import type { AuditLog } from "./types";
 
 interface AuditLogTableProps {
@@ -16,6 +18,7 @@ export default function AuditLogTable({
   onToggleSort,
   onViewDetails,
 }: AuditLogTableProps) {
+  const pagination = useTablePagination(logs);
   if (logs.length === 0) {
     return (
       <div className="rounded-lg border border-slate-800/60 px-4 py-12 text-center text-sm text-slate-400">
@@ -43,15 +46,15 @@ export default function AuditLogTable({
               </Th>
               <Th width="12%">Workflow ID</Th>
               <Th width="12%">Actor</Th>
-              <Th width="24%">Action Type</Th>
+              <Th width="22%">Action Type</Th>
               <Th width="10%">Details</Th>
               <Th width="12%">Risk Tier</Th>
-              <Th width="16%">HMAC Status</Th>
+              <Th width="18%">HMAC Status</Th>
             </tr>
           </thead>
 
           <tbody>
-            {logs.map((log) => (
+            {pagination.visibleRows.map((log) => (
               <tr
                 key={log.id}
                 className={[
@@ -97,7 +100,7 @@ export default function AuditLogTable({
 
       {/* ───── Mobile: card list ───── */}
       <ul className="divide-y divide-slate-700/60 md:hidden">
-        {logs.map((log) => (
+        {pagination.visibleRows.map((log) => (
           <li
             key={log.id}
             className={[
@@ -145,6 +148,7 @@ export default function AuditLogTable({
           </li>
         ))}
       </ul>
+      <TablePagination {...pagination} />
     </div>
   );
 }
@@ -237,23 +241,54 @@ function HmacBadge({
   status: AuditLog["hmacStatus"];
   signature?: string;
 }) {
-  const present = status === "Present" || status === "Verified";
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const appearance = {
+    Verified: { label: "Verified", icon: Lock, color: "border-emerald-500/25 bg-emerald-500/10 text-emerald-400", hint: "Event payload signature verified" },
+    Present: { label: "Unverified", icon: ShieldQuestion, color: "border-amber-500/25 bg-amber-500/10 text-amber-400", hint: "Signature present; verification has not been performed" },
+    Invalid: { label: "Invalid", icon: AlertTriangle, color: "border-red-500/25 bg-red-500/10 text-red-400", hint: "Event payload signature failed verification" },
+    "Not found": { label: "Not found", icon: AlertTriangle, color: "border-slate-500/25 bg-slate-500/10 text-slate-400", hint: "Audit record was not found during verification" },
+    Missing: { label: "Missing", icon: ShieldQuestion, color: "border-slate-500/25 bg-slate-500/10 text-slate-400", hint: "The backend returned no HMAC signature" },
+  }[status];
+  const Icon = appearance.icon;
+
+  async function copySignature() {
+    if (!signature) return;
+    try {
+      await navigator.clipboard.writeText(signature);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  }
+
   return (
-    <span
-      title={signature ?? "The backend returned no HMAC signature"}
-      className={[
-        "inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-1 text-[10px] font-medium leading-tight text-white",
-        status === "Verified" ? "bg-[#429861]" : status === "Present" ? "bg-slate-600" : "bg-[#b54848]",
-      ].join(" ")}
-    >
-      {present ? (
-        <Lock className="h-3 w-3 shrink-0" />
-      ) : (
-        <AlertTriangle className="h-3 w-3 shrink-0" />
-      )}
-      <span className="min-w-0 break-words [overflow-wrap:anywhere]">
-        {status === "Verified" ? "Payload verified" : status === "Present" ? "Not verified · signature present" : status === "Invalid" ? "Invalid signature" : status === "Not found" ? "Record not found" : "Signature missing"}
+    <div className="flex min-w-0 max-w-full flex-col items-start gap-1.5">
+      <span
+        title={appearance.hint}
+        className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-1 text-[10px] font-medium leading-none ${appearance.color}`}
+      >
+        <Icon aria-hidden="true" className="h-3 w-3 shrink-0" />
+        {appearance.label}
       </span>
-    </span>
+      {signature && (
+        <div className="flex max-w-full items-center gap-1 rounded-md border border-slate-700/60 bg-slate-800/40 pl-1.5">
+          <code title={signature} className="min-w-0 truncate text-[10px] leading-5 tracking-tight text-slate-400">
+            {signature.slice(0, 16)}{signature.length > 16 ? "…" : ""}
+          </code>
+          <button
+            type="button"
+            onClick={(event) => { event.stopPropagation(); void copySignature(); }}
+            aria-label="Copy full HMAC SHA-256 signature"
+            title={copyStatus === "copied" ? "Signature copied" : "Copy full signature"}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-r-md border-l border-slate-700/60 text-slate-400 transition-colors hover:bg-slate-700/60 hover:text-slate-200 focus-visible:outline-2 focus-visible:outline-blue-400"
+          >
+            {copyStatus === "copied" ? <Check aria-hidden="true" className="h-3 w-3 text-emerald-400" /> : <Copy aria-hidden="true" className="h-3 w-3" />}
+          </button>
+        </div>
+      )}
+      <span role="status" className={copyStatus === "failed" ? "max-w-[180px] text-[10px] leading-snug text-red-400" : "sr-only"}>
+        {copyStatus === "copied" ? "Signature copied" : copyStatus === "failed" ? "Copy failed. Copy the signature from event details." : ""}
+      </span>
+    </div>
   );
 }

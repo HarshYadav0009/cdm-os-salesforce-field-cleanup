@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import Head from "./Head";
 import LeftSideBar from "./LeftSideBar";
 import RightSideSection from "./RightSideSection";
@@ -11,7 +12,11 @@ import { useRealtime } from "@/app/lib/ws/RealtimeProvider";
 import type { Proposal } from "@/types/governance";
 
 export default function MainPage() {
-  const [activePage, setActivePage] = useState<NavId>(DEFAULT_NAV_ID);
+  const pathname = usePathname();
+  const [localPage, setActivePage] = useState<NavId>(DEFAULT_NAV_ID);
+  const activePage: NavId = pathname === "/approvals"
+    ? "ApprovalQueue"
+    : pathname === "/audit" ? "AuditLog" : localPage;
   const [dependencyViewerVisited, setDependencyViewerVisited] = useState(false);
   const [fieldToolsVisited, setFieldToolsVisited] = useState(false);
   const [inspectionTarget, setInspectionTarget] = useState({
@@ -153,7 +158,9 @@ export default function MainPage() {
   );
 
   const navigateTo = (page: NavId) => {
-    setActivePage(page);
+    setActivePage(page === "ApprovalQueue" || page === "AuditLog" ? DEFAULT_NAV_ID : page);
+    const target = page === "ApprovalQueue" ? "/approvals" : page === "AuditLog" ? "/audit" : "/";
+    if (pathname !== target) window.history.pushState(null, "", target);
     if (page === "DependencyViewer") setDependencyViewerVisited(true);
     if (page === "FieldTools") setFieldToolsVisited(true);
     setNotificationsOpen(false);
