@@ -123,6 +123,16 @@ class SalesforceBackupService:
         field_name = backup["field_name"]
         original_desc = backup.get("description", "")
 
+        try:
+            self.metadata_service.get_field_metadata(object_name, field_name)
+        except ValueError as exc:
+            raise ValueError(
+                f"Cannot restore the description of {object_name}.{field_name}: the field is not present. "
+                "To recover a deleted custom field and its data, use Salesforce Setup > Object Manager > "
+                "the object > Fields & Relationships > Deleted Fields > Undelete, "
+                "if it is still within the retention period. This metadata backup cannot undelete a field."
+            ) from exc
+
         # Restore description
         desc_restored = self.client.update_field_description(
             object_name,

@@ -12,7 +12,12 @@ import {
 import type { Proposal } from "@/types/governance";
 
 type McpStatus = "checking" | "online" | "offline";
-type SalesforceOrgType = "Developer" | "UAT" | "Sandbox" | "Production" | "Mock";
+type SalesforceOrgType =
+  | "Developer"
+  | "UAT"
+  | "Sandbox"
+  | "Production"
+  | "Mock";
 
 interface HeadProps {
   /** Shows the hamburger toggle on mobile/tablet (< lg) */
@@ -56,10 +61,13 @@ export default function Head({
   onUserClick,
 }: HeadProps) {
   const [mcpStatus, setMcpStatus] = useState<McpStatus>("checking");
+  const [apiStatus, setApiStatus] = useState<McpStatus>("checking");
   const [isMock, setIsMock] = useState(false);
   const [orgType, setOrgType] = useState<SalesforceOrgType | null>(null);
   const [orgName, setOrgName] = useState<string | null>(null);
-  const [orgUserDisplayName, setOrgUserDisplayName] = useState<string | null>(null);
+  const [orgUserDisplayName, setOrgUserDisplayName] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!notificationsOpen) return;
@@ -69,6 +77,44 @@ export default function Head({
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [notificationsOpen, onBellClick]);
+
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    let checkingApi = false;
+    const checkApiStatus = async () => {
+      if (checkingApi) return;
+      checkingApi = true;
+      try {
+        const response = await fetch("/api/control-plane/health", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const result: unknown = await response.json();
+        if (active)
+          setApiStatus(
+            response.ok &&
+              typeof result === "object" &&
+              result !== null &&
+              "status" in result &&
+              result.status === "online"
+              ? "online"
+              : "offline",
+          );
+      } catch {
+        if (active) setApiStatus("offline");
+      } finally {
+        checkingApi = false;
+      }
+    };
+    void checkApiStatus();
+    const interval = window.setInterval(() => void checkApiStatus(), 15000);
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -88,11 +134,7 @@ export default function Head({
           "status" in result &&
           result.status === "online";
         setMcpStatus(online ? "online" : "offline");
-        setIsMock(
-          online &&
-            "is_mock" in result &&
-            result.is_mock === true,
-        );
+        setIsMock(online && "is_mock" in result && result.is_mock === true);
         const returnedOrgType =
           online && "org_type" in result && typeof result.org_type === "string"
             ? result.org_type
@@ -145,7 +187,7 @@ export default function Head({
         : "MCP Offline";
 
   return (
-    <header className="flex shrink-0 items-center gap-2 border-b border-slate-700 bg-[#0D1C42] px-3 py-2 sm:px-4 sm:py-3">
+    <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-700 bg-[#0D1C42] px-3 py-2 sm:px-4 sm:py-3">
       {/* Mobile menu button */}
       <button
         type="button"
@@ -153,17 +195,19 @@ export default function Head({
         aria-label={navOpen ? "Close navigation" : "Open navigation"}
         aria-expanded={navOpen}
         aria-controls="main-navigation"
-        className="shrink-0 rounded-md p-2 text-slate-200 transition-colors hover:bg-slate-800/60 lg:hidden"
+        className="order-1 shrink-0 rounded-md p-2 text-slate-200 transition-colors hover:bg-slate-800/60 lg:hidden"
       >
         <Menu className="h-5 w-5" />
       </button>
 
       {/* Title — short on mobile, full on md+ */}
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="order-2 flex min-w-0 flex-1 items-center gap-2">
         <h1 className="min-w-0 flex-1 truncate text-sm font-bold text-slate-100 sm:text-base">
           <span className="md:hidden">{shortTitle}</span>
           <span className="hidden md:inline">{title}</span>
         </h1>
+      </div>
+      <div className="order-4 flex w-full min-w-0 flex-wrap items-center gap-2 md:order-3 md:w-auto">
         {mcpStatus === "online" && orgType && (
           <span
             role="status"
@@ -173,7 +217,7 @@ export default function Head({
                 ? "Org type is configured as UAT using SF_ORG_TYPE."
                 : `Connected Salesforce org: ${orgType}${isMock ? " mock data" : ""}.`
             }
-            className={`inline-flex shrink-0 items-center rounded-full border px-2 py-1 text-[9px] font-semibold sm:px-2.5 sm:text-xs ${
+            className={`inline-block max-w-[150px] truncate rounded-full border px-2 py-1 text-[10px] font-semibold sm:max-w-[220px] sm:px-2.5 sm:text-xs ${
               orgType === "Production"
                 ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
                 : orgType === "UAT"
@@ -185,30 +229,51 @@ export default function Head({
                       : "border-slate-600 bg-slate-700/50 text-slate-200"
             }`}
           >
-            {orgType}{orgName ? ` - ${orgName}` : ""}
+            {orgType}
+            {orgName ? ` - ${orgName}` : ""}
           </span>
         )}
-      </div>
-      <span
-        role="status"
-        aria-label={statusLabel}
-        title={isMock ? "MCP is responding with Salesforce mock data." : statusLabel}
-        className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-300 sm:gap-2 sm:px-2.5 sm:text-xs"
-      >
         <span
-          className={`h-2 w-2 rounded-full ${
-            mcpStatus === "online"
-              ? "bg-emerald-400"
-              : mcpStatus === "checking"
-                ? "bg-amber-400"
-                : "bg-rose-400"
-          }`}
-        />
-        {statusLabel}
-      </span>
+          role="status"
+          aria-label={statusLabel}
+          title={
+            isMock
+              ? "MCP is responding with Salesforce mock data."
+              : statusLabel
+          }
+          className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-300 sm:gap-2 sm:px-2.5 sm:text-xs"
+        >
+          <span
+            className={`h-2 w-2 rounded-full ${
+              mcpStatus === "online"
+                ? "bg-emerald-400"
+                : mcpStatus === "checking"
+                  ? "bg-amber-400"
+                  : "bg-rose-400"
+            }`}
+          />
+          {statusLabel}
+        </span>
+        <span
+          role="status"
+          aria-label={`Control plane ${apiStatus}`}
+          title={`Control-plane API: ${apiStatus}`}
+          className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-300 sm:gap-2 sm:px-2.5 sm:text-xs"
+        >
+          <span
+            aria-hidden="true"
+            className={`h-2 w-2 rounded-full ${apiStatus === "online" ? "bg-emerald-400" : apiStatus === "checking" ? "bg-amber-400" : "bg-rose-400"}`}
+          />
+          {apiStatus === "checking"
+            ? "Checking API"
+            : apiStatus === "online"
+              ? "API Online"
+              : "API Offline"}
+        </span>
+      </div>
 
       {/* Right cluster */}
-      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+      <div className="order-3 flex shrink-0 items-center gap-1 sm:gap-2 md:order-4">
         <div className="relative">
           <button
             type="button"
@@ -269,24 +334,30 @@ export default function Head({
                     )}
                   </button>
                   {notificationsError && (
-                  <button
-                    type="button"
-                    onClick={onRetryNotifications}
-                    aria-label="Retry loading notifications"
-                    className="rounded-md p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={onRetryNotifications}
+                      aria-label="Retry loading notifications"
+                      className="rounded-md p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </button>
                   )}
                 </div>
               </header>
 
               {notificationsLoading ? (
-                <p role="status" className="px-4 py-6 text-center text-xs text-slate-400">
+                <p
+                  role="status"
+                  className="px-4 py-6 text-center text-xs text-slate-400"
+                >
                   Loading pending approvals…
                 </p>
               ) : notificationsError ? (
-                <p role="alert" className="px-4 py-5 text-xs leading-5 text-rose-200">
+                <p
+                  role="alert"
+                  className="px-4 py-5 text-xs leading-5 text-rose-200"
+                >
                   Unable to load notifications: {notificationsError}
                 </p>
               ) : notifications.length === 0 ? (
@@ -309,7 +380,8 @@ export default function Head({
                           {getProposalTarget(proposal)}
                         </span>
                         <span className="mt-1 block text-[10px] text-slate-500">
-                          {proposal.tier} · {new Date(proposal.created_at).toLocaleString()}
+                          {proposal.tier} ·{" "}
+                          {new Date(proposal.created_at).toLocaleString()}
                         </span>
                       </button>
                     </li>

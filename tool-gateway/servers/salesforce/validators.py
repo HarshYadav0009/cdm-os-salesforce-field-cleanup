@@ -17,10 +17,8 @@ def validate_salesforce_identifier(value: str) -> str:
             f"Invalid Salesforce identifier '{value}'. Must begin with a letter and contain only alphanumeric characters or underscores."
         )
 
-    # Disallow consecutive underscores (violates Salesforce naming rules)
-    if "__" in value and not value.endswith("__c"):
-        raise ValueError(f"Salesforce identifier cannot contain consecutive underscores: '{value}'")
-
+    # Salesforce uses double underscores for namespaces, Person Account fields
+    # (__pc), relationships (__r), and object suffixes beyond __c.
     return value
 
 
@@ -89,7 +87,13 @@ class DeleteFieldSchema(BaseModel):
 
 
 class RollbackFieldSchema(BaseModel):
-    backup_id: str = Field(..., description="Unique backup identifier created during pre-modification snapshot")
+    backup_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]*$",
+        description="Unique backup identifier created during pre-modification snapshot",
+    )
 
 
 class BulkScanSchema(BaseModel):

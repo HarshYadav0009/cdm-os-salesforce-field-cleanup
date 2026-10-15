@@ -85,8 +85,8 @@ class ToolGatewayService:
             },
             {
                 "tool_id": "salesforce_rollback_field",
-                "name": "Rollback Field",
-                "description": "Roll back a modified field to original state using backup ID",
+                "name": "Restore Field Description",
+                "description": "Restore a field description from a backup ID; does not restore deleted fields, data, or permissions",
                 "tier": "Tier-2",
             },
             {

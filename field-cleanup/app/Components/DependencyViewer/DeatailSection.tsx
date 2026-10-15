@@ -1,6 +1,12 @@
 "use client";
 
-import { Activity, AlertTriangle, Braces, Database, Layers3 } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  Braces,
+  Database,
+  Layers3,
+} from "lucide-react";
 import type { SalesforceFieldMetadata } from "@/app/lib/api/salesforce";
 
 export interface FieldDetail {
@@ -8,7 +14,7 @@ export interface FieldDetail {
   dataType: string;
   usagePercent: number | null;
   recordsPopulated: string | null;
-  totalReferences: number;
+  totalReferences: number | null;
   logs: string[];
   metadata: SalesforceFieldMetadata | null;
 }
@@ -63,8 +69,12 @@ export default function DetailSection({ detail }: DetailSectionProps) {
           <StatCard
             icon={Layers3}
             label="References"
-            value={String(totalReferences)}
-            detail="Across code & metadata"
+            value={totalReferences === null ? "—" : String(totalReferences)}
+            detail={
+              totalReferences === null
+                ? "Run analysis"
+                : "Across code & metadata"
+            }
           />
         </div>
 
@@ -79,9 +89,18 @@ export default function DetailSection({ detail }: DetailSectionProps) {
             <dl className="divide-y divide-slate-800 rounded-xl border border-slate-800 bg-slate-950/50 px-3">
               <MetadataRow label="API name" value={metadata.name} mono />
               <MetadataRow label="Nullable" value={yesNo(metadata.nillable)} />
-              <MetadataRow label="Createable" value={yesNo(metadata.createable)} />
-              <MetadataRow label="Updateable" value={yesNo(metadata.updateable)} />
-              <MetadataRow label="Calculated" value={yesNo(metadata.calculated)} />
+              <MetadataRow
+                label="Createable"
+                value={yesNo(metadata.createable)}
+              />
+              <MetadataRow
+                label="Updateable"
+                value={yesNo(metadata.updateable)}
+              />
+              <MetadataRow
+                label="Calculated"
+                value={yesNo(metadata.calculated)}
+              />
               {metadata.length != null && (
                 <MetadataRow label="Length" value={String(metadata.length)} />
               )}
@@ -93,7 +112,9 @@ export default function DetailSection({ detail }: DetailSectionProps) {
               )}
               {metadata.description && (
                 <div className="py-2.5">
-                  <dt className="text-[10px] font-medium text-slate-500">Description</dt>
+                  <dt className="text-[10px] font-medium text-slate-500">
+                    Description
+                  </dt>
                   <dd className="mt-1 text-xs leading-5 text-slate-300">
                     {metadata.description}
                   </dd>
@@ -125,7 +146,7 @@ export default function DetailSection({ detail }: DetailSectionProps) {
                 ) : (
                   <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-blue-400" />
                 )}
-                <span>{log}</span>
+                <span className="min-w-0 break-words">{log}</span>
               </p>
             ))}
           </div>
@@ -154,7 +175,9 @@ function StatCard({
         <Icon className="h-3.5 w-3.5" />
         {label}
       </div>
-      <p className={`mt-2 truncate text-xl font-semibold tabular-nums ${warning ? "text-amber-300" : "text-slate-100"}`}>
+      <p
+        className={`mt-2 truncate text-xl font-semibold tabular-nums ${warning ? "text-amber-300" : "text-slate-100"}`}
+      >
         {value}
       </p>
       <p className="mt-1 truncate text-[10px] text-slate-500" title={detail}>
@@ -176,7 +199,9 @@ function MetadataRow({
   return (
     <div className="flex items-center justify-between gap-3 py-2.5">
       <dt className="text-[10px] font-medium text-slate-500">{label}</dt>
-      <dd className={`truncate text-right text-[11px] text-slate-300 ${mono ? "font-mono" : ""}`}>
+      <dd
+        className={`min-w-0 break-words text-right text-[11px] text-slate-300 [overflow-wrap:anywhere] ${mono ? "font-mono" : ""}`}
+      >
         {value}
       </dd>
     </div>

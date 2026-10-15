@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Head from "./Head";
 import LeftSideBar from "./LeftSideBar";
 import RightSideSection from "./RightSideSection";
-import { DEFAULT_NAV_ID } from "./navigation";        // ← value only
-import type { NavId } from "./navigation";            // ← type only
+import { DEFAULT_NAV_ID } from "./navigation"; // ← value only
+import type { NavId } from "./navigation"; // ← type only
 import { useApiResource } from "@/app/lib/api/useApiResource";
 import { useRealtime } from "@/app/lib/ws/RealtimeProvider";
 import type { Proposal } from "@/types/governance";
@@ -13,10 +13,17 @@ import type { Proposal } from "@/types/governance";
 export default function MainPage() {
   const [activePage, setActivePage] = useState<NavId>(DEFAULT_NAV_ID);
   const [dependencyViewerVisited, setDependencyViewerVisited] = useState(false);
+  const [fieldToolsVisited, setFieldToolsVisited] = useState(false);
+  const [inspectionTarget, setInspectionTarget] = useState({
+    object: "",
+    field: "",
+    revision: 0,
+  });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(false);
+  const [notificationSoundEnabled, setNotificationSoundEnabled] =
+    useState(false);
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>(
     () => {
       if (typeof window === "undefined") return [];
@@ -122,6 +129,7 @@ export default function MainPage() {
   const navigateTo = (page: NavId) => {
     setActivePage(page);
     if (page === "DependencyViewer") setDependencyViewerVisited(true);
+    if (page === "FieldTools") setFieldToolsVisited(true);
     setNotificationsOpen(false);
   };
 
@@ -239,6 +247,16 @@ export default function MainPage() {
         <RightSideSection
           activePage={activePage}
           dependencyViewerVisited={dependencyViewerVisited}
+          fieldToolsVisited={fieldToolsVisited}
+          inspectionTarget={inspectionTarget}
+          onInspectField={(object, field) => {
+            setInspectionTarget((current) => ({
+              object,
+              field,
+              revision: current.revision + 1,
+            }));
+            navigateTo("DependencyViewer");
+          }}
         />
       </div>
     </div>

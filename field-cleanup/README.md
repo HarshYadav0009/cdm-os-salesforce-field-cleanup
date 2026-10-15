@@ -39,6 +39,17 @@ The backend does not currently register endpoints for dashboard summary, policy 
 
 `NEXT_PUBLIC_WS_URL` may be configured for a separate deployment that provides a WebSocket server. The bundled FastAPI backend itself does not expose a WebSocket route.
 
+## Field Tools workspace
+
+Open **Field Tools** in the sidebar to use:
+
+- **Bulk scan:** select Salesforce objects and a population threshold, then filter custom fields by cleanup candidates, dependencies, or active usage. Objects skipped by the gateway are identified as a partial scan. Candidates still need a full assessment in Dependency Viewer before cleanup.
+- **Review a bulk result:** choose “Review in Dependency Viewer” to open the object and field in the shared assessment workflow. Analysis runs when you choose “Analyze dependencies.”
+- **Backup recovery:** select a backup from the latest 100 completed proposals, or enter a backup ID manually. Supply a reason and confirm the description change to create a governed restore proposal. Its execution status refreshes automatically. Restoration only replaces the description; it cannot recover deleted fields, record data, or permissions.
+- **Tool catalog:** browse the gateway's live capabilities and tiers. Individual field checks and cleanup proposals are handled in Dependency Viewer.
+
+The server-side gateway proxy uses `TOOL_GATEWAY_URL`, falling back to `MCP_GATEWAY_URL` and then `http://127.0.0.1:8080`. Both gateway (8080) and control plane (8000) must be running for backup recovery. Restart the control plane after updating to register the new `salesforce_rollback_field` Tier 2 tool.
+
 ## Local development
 1. Open a terminal in the `field-cleanup` folder.
 2. Install dependencies. Run this only once, the first time you set up the project:
@@ -54,5 +65,6 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ```bash
 npm run lint
+npm test
 npm run build
 ```

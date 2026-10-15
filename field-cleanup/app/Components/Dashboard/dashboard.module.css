@@ -33,6 +33,14 @@
     color:rgb(58, 144, 250);
 }
 
+:global(html[data-theme="light"]) .fieldTable tbody tr:hover {
+    background: #eff6ff;
+}
+
+:global(html[data-theme="light"]) .fieldTable tbody tr td:last-child {
+    color: #1d4ed8;
+}
+
 
 
 

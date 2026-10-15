@@ -9,8 +9,16 @@ interface RiskAssessmentModalProps {
   row: QueueRow | null;
   onClose: () => void;
   initialDecision?: "approve" | "reject";
-  onApprove?: (row: QueueRow, reviewerEmail: string, reason: string) => Promise<void>;
-  onReject?: (row: QueueRow, reviewerEmail: string, reason: string) => Promise<void>;
+  onApprove?: (
+    row: QueueRow,
+    reviewerEmail: string,
+    reason: string,
+  ) => Promise<void>;
+  onReject?: (
+    row: QueueRow,
+    reviewerEmail: string,
+    reason: string,
+  ) => Promise<void>;
 }
 
 export default function RiskAssessmentModal({
@@ -22,7 +30,9 @@ export default function RiskAssessmentModal({
   onReject,
 }: RiskAssessmentModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [decision, setDecision] = useState<"approve" | "reject" | null>(initialDecision ?? null);
+  const [decision, setDecision] = useState<"approve" | "reject" | null>(
+    initialDecision ?? null,
+  );
   const [reviewerEmail, setReviewerEmail] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -137,8 +147,9 @@ export default function RiskAssessmentModal({
             {policyResult ? (
               <div className="space-y-2">
                 <p>
-                  Allowed: {policyResult.allowed ? "Yes" : "No"} · Human approval
-                  required: {policyResult.requires_human_approval ? "Yes" : "No"}
+                  Allowed: {policyResult.allowed ? "Yes" : "No"} · Human
+                  approval required:{" "}
+                  {policyResult.requires_human_approval ? "Yes" : "No"}
                 </p>
                 {policyResult.matched_rules.length > 0 && (
                   <p>Matched rules: {policyResult.matched_rules.join(", ")}</p>
@@ -156,8 +167,12 @@ export default function RiskAssessmentModal({
             )}
           </section>
           <section>
-            <label htmlFor="reviewer-email" className="mb-2 block text-sm font-semibold text-white">
-              Reviewer email <span className="font-normal text-slate-400">(required)</span>
+            <label
+              htmlFor="reviewer-email"
+              className="mb-2 block text-sm font-semibold text-white"
+            >
+              Reviewer email{" "}
+              <span className="font-normal text-slate-400">(required)</span>
             </label>
             <input
               id="reviewer-email"
@@ -168,15 +183,25 @@ export default function RiskAssessmentModal({
               placeholder="reviewer@example.com"
               className="mb-4 w-full rounded-md border border-slate-700 bg-slate-950 p-2 text-sm text-slate-200 outline-none focus:border-blue-500"
             />
-            <label htmlFor="approval-reason" className="mb-2 block text-sm font-semibold text-white">
-              Decision reason <span className="font-normal text-slate-400">(required, audited)</span>
+            <label
+              htmlFor="approval-reason"
+              className="mb-2 block text-sm font-semibold text-white"
+            >
+              Decision reason{" "}
+              <span className="font-normal text-slate-400">
+                (required, audited)
+              </span>
             </label>
             <textarea
               id="approval-reason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               rows={3}
-              placeholder={decision === "reject" ? "Explain why this proposal is rejected…" : "Explain why this proposal is approved…"}
+              placeholder={
+                decision === "reject"
+                  ? "Explain why this proposal is rejected…"
+                  : "Explain why this proposal is approved…"
+              }
               className="w-full rounded-md border border-slate-700 bg-slate-950 p-2 text-sm text-slate-200 outline-none focus:border-blue-500"
             />
           </section>
@@ -218,7 +243,9 @@ export default function RiskAssessmentModal({
           <button
             type="button"
             onClick={() => void submit()}
-            disabled={!decision || !validEmail || reason.trim().length < 8 || busy}
+            disabled={
+              !decision || !validEmail || reason.trim().length < 8 || busy
+            }
             className={`rounded-md px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40 ${
               decision === "reject"
                 ? "bg-rose-700 hover:bg-rose-600"

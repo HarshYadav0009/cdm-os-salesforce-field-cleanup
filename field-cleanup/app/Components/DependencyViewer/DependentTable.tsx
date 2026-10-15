@@ -25,7 +25,10 @@ export default function DependentTable({
   const [typeFilter, setTypeFilter] = useState("All types");
   const [query, setQuery] = useState("");
   const types = useMemo(
-    () => ["All types", ...Array.from(new Set(dependencies.map((item) => item.type)))],
+    () => [
+      "All types",
+      ...Array.from(new Set(dependencies.map((item) => item.type))),
+    ],
     [dependencies],
   );
   const filteredDependencies = useMemo(() => {
@@ -72,7 +75,7 @@ export default function DependentTable({
           </label>
         </div>
 
-        {types.length > 2 && (
+        {types.length > 1 && (
           <div className="mt-3 flex gap-1.5 overflow-x-auto pb-0.5">
             {types.map((type) => {
               const count =
@@ -93,7 +96,9 @@ export default function DependentTable({
                   }`}
                 >
                   {type}
-                  <span className="ml-1.5 tabular-nums opacity-70">{count}</span>
+                  <span className="ml-1.5 tabular-nums opacity-70">
+                    {count}
+                  </span>
                 </button>
               );
             })}
@@ -113,8 +118,8 @@ export default function DependentTable({
             Could not analyze dependencies
           </h3>
           <p className="mt-1 max-w-lg break-words text-xs leading-5 text-slate-400">
-            The reference scan for the selected field did not complete. {error}
-            {" "}Check the Salesforce connection and permissions, then try again.
+            The reference scan for the selected field did not complete. {error}{" "}
+            Check the Salesforce connection and permissions, then try again.
           </p>
         </div>
       ) : filteredDependencies.length === 0 ? (
@@ -145,16 +150,20 @@ export default function DependentTable({
               </colgroup>
               <thead>
                 <tr>
-                  {["Component", "Type", "Impact area", "Reference context"].map(
-                    (heading) => (
-                      <th
-                        key={heading}
-                        className={`sticky top-0 z-10 bg-slate-950 px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 first:pl-4 last:pr-4 sm:px-4 ${heading === "Type" ? "whitespace-nowrap" : ""}`}
-                      >
-                        {heading}
-                      </th>
-                    ),
-                  )}
+                  {[
+                    "Component",
+                    "Type",
+                    "Impact area",
+                    "Reference context",
+                  ].map((heading) => (
+                    <th
+                      key={heading}
+                      scope="col"
+                      className={`sticky top-0 z-10 bg-slate-950 px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 first:pl-4 last:pr-4 sm:px-4 ${heading === "Type" ? "whitespace-nowrap" : ""}`}
+                    >
+                      {heading}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
@@ -199,9 +208,15 @@ export default function DependentTable({
                   <TypeBadge type={dependency.type} />
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-xs">
-                  <MobileField label="Impact area" value={dependency.impactArea} />
+                  <MobileField
+                    label="Impact area"
+                    value={dependency.impactArea}
+                  />
                   <div className="col-span-2">
-                    <MobileField label="Reference context" value={dependency.referenceContext} />
+                    <MobileField
+                      label="Reference context"
+                      value={dependency.referenceContext}
+                    />
                   </div>
                 </div>
               </li>
@@ -211,7 +226,8 @@ export default function DependentTable({
       )}
       {filteredDependencies.length > 0 && (
         <footer className="border-t border-slate-800 px-4 py-2.5 text-[10px] text-slate-600 sm:px-5">
-          Showing {filteredDependencies.length} of {dependencies.length} references
+          Showing {filteredDependencies.length} of {dependencies.length}{" "}
+          references
         </footer>
       )}
     </section>
