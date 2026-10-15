@@ -18,7 +18,7 @@ import {
 
 export default function BackupRecovery() {
   const source = useApiResource<Proposal[]>(
-    "/proposals/?status=COMPLETED&limit=100",
+    "/proposals/",
     [],
   );
   const [backupId, setBackupId] = useState("");
@@ -27,7 +27,7 @@ export default function BackupRecovery() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
-  const backups = source.data
+  const backups = source.data.filter((item) => item.status === "COMPLETED")
     .flatMap((item) => {
       const result = item.execution_result;
       return result &&
@@ -107,7 +107,8 @@ export default function BackupRecovery() {
     setBusy(true);
     setError(null);
     try {
-      setProposal(await GovernanceAPI.executeProposal(current.id));
+      const execution = await GovernanceAPI.executeProposal(current.id);
+      setProposal({ ...current, status: execution.status === "SUCCESS" ? "COMPLETED" : execution.status, execution_result: { ...execution.result, ...(execution.execution_id ? { execution_id: execution.execution_id } : {}) }, error_message: execution.status === "FAILED" ? execution.error_message || "Execution failed." : undefined });
     } catch (error) {
       setError(message(error));
     } finally {
@@ -127,8 +128,10 @@ export default function BackupRecovery() {
       });
       setProposal(created);
       setConfirmed(false);
-      if (["POLICY_APPROVED", "HUMAN_APPROVED"].includes(created.status))
-        setProposal(await GovernanceAPI.executeProposal(created.id));
+      if (["POLICY_APPROVED", "HUMAN_APPROVED"].includes(created.status)) {
+        const execution = await GovernanceAPI.executeProposal(created.id);
+        setProposal({ ...created, status: execution.status === "SUCCESS" ? "COMPLETED" : execution.status, execution_result: { ...execution.result, ...(execution.execution_id ? { execution_id: execution.execution_id } : {}) }, error_message: execution.status === "FAILED" ? execution.error_message || "Execution failed." : undefined });
+      }
     } catch (error) {
       setError(message(error));
     } finally {
@@ -150,7 +153,7 @@ export default function BackupRecovery() {
           </button>
         </div>
         <p className="mt-2 text-sm text-slate-400">
-          Backup IDs from the latest 100 completed proposals. You can also enter
+          Backup IDs from the returned completed proposals. You can also enter
           an existing backup ID manually.
         </p>
         <div className="mt-4 space-y-3">

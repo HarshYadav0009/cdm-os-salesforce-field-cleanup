@@ -13,6 +13,15 @@ function formatDate(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+function lastActivity(proposal: Proposal): string {
+  const timestamps = [
+    proposal.last_activity_at, proposal.updated_at, proposal.executed_at,
+    proposal.decided_at, proposal.human_decision?.decided_at, proposal.created_at,
+  ].filter((value): value is string => typeof value === "string" && Number.isFinite(Date.parse(value)));
+  if (!timestamps.length) return "Not supplied";
+  return formatDate(timestamps.reduce((latest, value) => Date.parse(value) > Date.parse(latest) ? value : latest));
+}
+
 function StatusBadge({ status }: { status: Proposal["status"] }) {
   const color =
     status === "POLICY_APPROVED" || status === "HUMAN_APPROVED" || status === "COMPLETED"
@@ -36,7 +45,7 @@ function TierBadge({ tier }: { tier: Proposal["tier"] }) {
       ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
       : tier === "Tier-2"
         ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
-        : "border-rose-500/20 bg-rose-500/10 text-rose-300";
+        : tier === "Tier-3" ? "border-rose-500/20 bg-rose-500/10 text-rose-300" : "border-slate-700 bg-slate-800 text-slate-300";
 
   return (
     <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${color}`}>
@@ -48,17 +57,23 @@ function TierBadge({ tier }: { tier: Proposal["tier"] }) {
 export default function ProposalsPage() {
   const [page, setPage] = useState(0);
   const [status, setStatus] = useState("");
-  const source = useApiResource<Proposal[]>(`/proposals/?limit=15&offset=${page * 15}${status ? `&status=${status}` : ""}`, []);
+  const query = new URLSearchParams({ limit: "15", offset: String(page * 15) });
+  if (status) query.set("status", status);
+  const source = useApiResource<Proposal[]>(`/proposals/?${query}`, []);
+  const rows = source.data;
+  const filtered = rows;
   const { reload } = source;
   usePolling(reload);
   const { subscribe } = useRealtime();
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
-  const selectedProposal = source.data.find(({ id }) => id === selectedProposalId);
+  const detail = useApiResource<Proposal | null>(selectedProposalId ? `/proposals/${encodeURIComponent(selectedProposalId)}` : "", null);
+  const selectedProposal = selectedProposalId && !detail.error && detail.data?.id === selectedProposalId ? detail.data : null;
+  usePolling(detail.reload);
 
   useEffect(
     () =>
       subscribe((event) => {
-        if (event.type.startsWith("proposal.")) reload();
+        if (event.type.startsWith("proposal.") || event.type === "approval.updated") reload();
       }),
     [reload, subscribe],
   );
@@ -78,7 +93,7 @@ export default function ProposalsPage() {
       <header>
         <h1 className="text-xl font-bold sm:text-2xl">Proposals</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Review proposals, decisions, execution results, and activity. Updates refresh every 10 seconds.
+          Review proposals, decisions, execution results, and activity. Choose HUMAN REJECTED to see rejected proposals across the full history. Updates refresh every 10 seconds.
         </p>
       </header>
 
@@ -86,29 +101,29 @@ export default function ProposalsPage() {
         <label className="flex flex-col gap-1 text-xs text-slate-400">Proposal status
           <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); setSelectedProposalId(null); }} className="min-h-11 rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-white">
             <option value="">All statuses</option>
-            {["PENDING_HUMAN_APPROVAL", "POLICY_APPROVED", "HUMAN_APPROVED", "EXECUTING", "COMPLETED", "FAILED", "POLICY_DENIED", "HUMAN_REJECTED"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}
+            {["PROPOSED", "DECIDED", "PENDING_HUMAN_APPROVAL", "POLICY_APPROVED", "HUMAN_APPROVED", "EXECUTING", "COMPLETED", "FAILED", "POLICY_DENIED", "HUMAN_REJECTED"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}
           </select>
         </label>
         <button type="button" onClick={reload} disabled={source.loading} className="min-h-11 rounded-lg border border-slate-700 px-4 text-sm text-slate-200 disabled:opacity-50">Refresh proposals</button>
       </div>
       <div className="space-y-3 md:hidden">
-        {source.data.map((proposal) => <article key={proposal.id} className="min-w-0 space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-4">
+        {rows.map((proposal) => <article key={proposal.id} className="min-w-0 space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-4">
           <div className="flex flex-wrap gap-2"><StatusBadge status={proposal.status} /><TierBadge tier={proposal.tier} /></div>
           <p className="break-words text-sm font-semibold">{proposal.tool_id}</p>
           <p className="break-all font-mono text-xs text-slate-400">{proposal.id}</p>
-          <p className="break-words text-xs text-slate-400">{proposal.agent_id} · {formatDate(proposal.created_at)}</p>
+          <p className="break-words text-xs text-slate-400">{proposal.agent_id} · Last activity: {lastActivity(proposal)}</p>
           {proposal.error_message && <p className="line-clamp-2 break-words text-xs text-rose-300">{proposal.error_message}</p>}
           <button type="button" onClick={() => setSelectedProposalId(proposal.id)} aria-haspopup="dialog" className="min-h-11 w-full rounded-lg border border-blue-400/30 text-sm text-blue-300">View details and progress</button>
         </article>)}
       </div>
       <div className="overflow-hidden rounded-lg border border-slate-700 bg-slate-900">
-        {source.loading && source.data.length === 0 ? (
+        {source.loading && filtered.length === 0 ? (
           <p role="status" className="px-4 py-10 text-center text-sm text-slate-400">
             Loading proposals…
           </p>
-        ) : source.data.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm text-slate-400">
-            No proposals were returned by the API.
+            No proposals match this status on this page. Choose All statuses or return to the previous page.
           </p>
         ) : (
           <div className="hidden overflow-x-auto md:block">
@@ -120,12 +135,12 @@ export default function ProposalsPage() {
                   <th className="px-4 py-3">Tool</th>
                   <th className="px-4 py-3">Tier</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Created</th>
+                  <th className="px-4 py-3">Last activity</th>
                   <th className="px-4 py-3">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {source.data.map((proposal) => (
+                {rows.map((proposal) => (
                   <tr key={proposal.id} className="align-top">
                     <td className="px-4 py-3 font-mono text-xs" title={proposal.id}>
                       {proposal.id.slice(0, 8)}…
@@ -134,7 +149,7 @@ export default function ProposalsPage() {
                     <td className="px-4 py-3">{proposal.tool_id}</td>
                     <td className="px-4 py-3"><TierBadge tier={proposal.tier} /></td>
                     <td className="px-4 py-3"><StatusBadge status={proposal.status} /></td>
-                    <td className="whitespace-nowrap px-4 py-3">{formatDate(proposal.created_at)}</td>
+                    <td className="whitespace-nowrap px-4 py-3" title="Latest available update, execution, decision, or creation timestamp">{lastActivity(proposal)}</td>
                     <td className="px-4 py-3">
                       <button
                         type="button"
@@ -155,13 +170,15 @@ export default function ProposalsPage() {
       </div>
 
       <nav aria-label="Proposal pagination" className="flex flex-wrap items-center justify-between gap-3">
-        <p aria-live="polite" className="text-xs text-slate-400">Page {page + 1} · {source.data.length} proposals</p>
+        <p aria-live="polite" className="text-xs text-slate-400">Page {page + 1} · {rows.length} proposals on this page</p>
         <div className="flex gap-2">
           <button type="button" disabled={page === 0 || source.loading} onClick={() => { setPage((value) => value - 1); setSelectedProposalId(null); }} className="min-h-11 rounded-lg border border-slate-700 px-4 text-sm disabled:opacity-40">Previous</button>
-          <button type="button" disabled={source.data.length < 15 || source.loading || !!source.error} onClick={() => { setPage((value) => value + 1); setSelectedProposalId(null); }} className="min-h-11 rounded-lg border border-slate-700 px-4 text-sm disabled:opacity-40">Next</button>
+          <button type="button" disabled={rows.length < 15 || source.loading || !!source.error} onClick={() => { setPage((value) => value + 1); setSelectedProposalId(null); }} className="min-h-11 rounded-lg border border-slate-700 px-4 text-sm disabled:opacity-40">Next</button>
         </div>
       </nav>
-      {selectedProposal && (
+      {selectedProposalId && detail.loading && <p role="status" className="text-sm text-slate-400">Loading proposal details…</p>}
+      {selectedProposalId && detail.error && <p role="alert" className="text-sm text-rose-300">{detail.error} <button onClick={detail.reload} className="underline">Retry details</button></p>}
+      {selectedProposal && selectedProposal.id === selectedProposalId && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
           onMouseDown={(event) => {
@@ -202,7 +219,7 @@ export default function ProposalsPage() {
                 <span aria-hidden="true">·</span>
                 <span>{selectedProposal.tier}</span>
               </div>
-              <ExecutionPanel key={selectedProposal.id} proposal={selectedProposal} reload={reload} />
+              <ExecutionPanel key={selectedProposal.id} proposal={selectedProposal} reload={() => { reload(); detail.reload(); }} />
               <section
                 aria-labelledby="proposal-policy-title"
                 className={`rounded-lg border p-4 ${
@@ -313,7 +330,7 @@ export default function ProposalsPage() {
                 <div>
                   <dt className="text-xs text-slate-400">Human approval required</dt>
                   <dd className="mt-1 text-slate-200">
-                    {selectedProposal.policy_result?.requires_human_approval ? "Yes" : "No"}
+                    {selectedProposal.policy_result ? selectedProposal.policy_result.requires_human_approval ? "Yes" : "No" : "Not supplied"}
                   </dd>
                 </div>
                 {selectedProposal.human_decision && (

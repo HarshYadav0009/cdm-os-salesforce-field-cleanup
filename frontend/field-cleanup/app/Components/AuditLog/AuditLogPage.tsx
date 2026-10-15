@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
-import AuditReportControls, { type VerificationStatus } from "./AuditReportControls";
+import AuditReportControls from "./AuditReportControls";
 import AuditHeadSection from "./AuditHeadSection";
 import type { AuditInfoCard, AuditLog } from "./types";
 import { useApiResource } from "@/app/lib/api/useApiResource";
@@ -33,12 +33,11 @@ function toAuditLog(entry: AuditLogEntry): AuditLog {
 }
 
 export default function AuditLogPage() {
-  const source = useApiResource<AuditLogEntry[]>("/audit/?limit=500", []);
+  const source = useApiResource<AuditLogEntry[]>("/audit/?limit=50", []);
   const { reload } = source;
   usePolling(reload);
   const { subscribe } = useRealtime();
-  const [verification, setVerification] = useState<Record<string, VerificationStatus>>({});
-  const logs = useMemo(() => source.data.map((entry) => ({ ...toAuditLog(entry), hmacStatus: verification[entry.id] ?? (entry.hmac_signature ? "Present" : "Missing") })), [source.data, verification]);
+  const logs = useMemo(() => source.data.map(toAuditLog), [source.data]);
   const [search, setSearch] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
   const [dateRange, setDateRange] = useState("");
@@ -98,25 +97,15 @@ export default function AuditLogPage() {
   }, [logs, search, agentFilter, dateRange, sortAsc, currentTime]);
 
   const infoCards = useMemo<AuditInfoCard[]>(() => [
-    {
-      id: "signed",
-      title: "Events with HMAC",
-      label: "Returned by API:",
-      value: String(source.data.filter((entry) => Boolean(entry.hmac_signature)).length),
-    },
-    {
-      id: "unsigned",
-      title: "Events without HMAC",
-      label: "Returned by API:",
-      value: String(source.data.filter((entry) => !entry.hmac_signature).length),
-    },
+    { id: "events", title: "Audit events", label: "Returned by API:", value: String(source.data.length) },
+    { id: "signatures", title: "Events with HMAC", label: "Signature present, unverified:", value: String(source.data.filter((entry) => !!entry.hmac_signature).length) },
   ], [source.data]);
 
   return (
     <div className="space-y-2">
       <h1 className="p-1 text-xl font-bold sm:text-2xl">Audit Log</h1>
 
-      <AuditReportControls entries={filteredLogs.map((log) => source.data.find((entry) => entry.id === log.id)!)} verification={verification} onVerified={(next) => setVerification((current) => ({ ...current, ...next }))} />
+      <AuditReportControls entries={filteredLogs.map((log) => source.data.find((entry) => entry.id === log.id)!)} />
       <div className="rounded-lg border border-slate-700 bg-slate-900">
         <SourceNotice loading={source.loading} error={source.error} reload={source.reload} />
         <AuditHeadSection

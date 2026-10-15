@@ -1,0 +1,24 @@
+{
+  "backup_id": "bak_Account_Out_Time__c_e40bd5943480",
+  "created_at": "2026-10-15T11:27:58.105885+00:00",
+  "object_name": "Account",
+  "field_name": "Out_Time__c",
+  "metadata": {
+    "name": "Out_Time__c",
+    "label": "Out-Time",
+    "type": "datetime",
+    "length": 0,
+    "precision": 0,
+    "scale": 0,
+    "nillable": true,
+    "createable": true,
+    "updateable": true,
+    "calculated": false,
+    "custom": true,
+    "filterable": true,
+    "encrypted": false,
+    "description": ""
+  },
+  "description": "",
+  "checksum": "eb9c72c4a2545e7d27d968b906eb37905679d1f56794ceae063491dadba63d74"
+}

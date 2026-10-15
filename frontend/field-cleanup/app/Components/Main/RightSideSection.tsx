@@ -36,6 +36,7 @@ export default function RightSideSection({
             key={inspectionTarget.revision}
             initialObject={inspectionTarget.object}
             initialField={inspectionTarget.field}
+            autoAnalyze={inspectionTarget.revision > 0}
           />
         </div>
       )}

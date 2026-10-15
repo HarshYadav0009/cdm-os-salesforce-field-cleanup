@@ -1,6 +1,7 @@
-export type ToolTier = "Tier-1" | "Tier-2" | "Tier-3";
+export type ToolTier = "Tier-1" | "Tier-2" | "Tier-3" | "Not supplied";
 
 export type ProposalStatus =
+  | "DECIDED"
   | "PROPOSED"
   | "POLICY_APPROVED"
   | "POLICY_DENIED"
@@ -40,6 +41,8 @@ export interface Proposal {
   created_at: string;
   decided_at?: string;
   executed_at?: string;
+  updated_at?: string;
+  last_activity_at?: string;
 }
 
 export interface Agent {
@@ -51,7 +54,7 @@ export interface Agent {
   owner?: string;
   model_primary: string;
   model_fallback?: string;
-  status: "IDLE" | "RUNNING" | "PAUSED" | "ERROR" | "TERMINATED";
+  status: string;
   created_at: string;
   updated_at?: string;
 }

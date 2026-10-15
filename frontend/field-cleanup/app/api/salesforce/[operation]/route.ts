@@ -4,6 +4,7 @@ const OPERATIONS = {
   "field-usage": "/tools/salesforce/field-usage",
   "scan-references": "/tools/salesforce/scan-references",
   "field-metadata": "/tools/salesforce/field-metadata",
+  "full-assessment": "/tools/salesforce/full-assessment",
   "bulk-scan": "/tools/salesforce/bulk-scan",
   execute: "/tools/execute",
 } as const;
@@ -35,27 +36,19 @@ export async function POST(
   }
 
   let payload: unknown;
-  try {
-    payload = await request.json();
-  } catch {
-    return Response.json(
-      { detail: "Request body must be valid JSON." },
-      { status: 400 },
-    );
-  }
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    Array.isArray(payload)
-  ) {
-    return Response.json(
-      { detail: "Request body must be an object." },
-      { status: 400 },
-    );
+  if (operation !== "describe-global") {
+    try {
+      payload = await request.json();
+    } catch {
+      return Response.json({ detail: "Request body must be valid JSON." }, { status: 400 });
+    }
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      return Response.json({ detail: "Request body must be an object." }, { status: 400 });
+    }
   }
   if (
     operation === "execute" &&
-    (!("tool_name" in payload) ||
+    ((!payload || typeof payload !== "object" || !("tool_name" in payload)) ||
       typeof payload.tool_name !== "string" ||
       !READ_TOOLS.has(payload.tool_name))
   ) {
@@ -71,6 +64,7 @@ export async function POST(
   const gatewayUrl = (
     process.env.TOOL_GATEWAY_URL ??
     process.env.MCP_GATEWAY_URL ??
+    process.env.NEXT_PUBLIC_TOOL_GATEWAY_URL ??
     "http://127.0.0.1:8080"
   ).replace(/\/$/, "");
 
@@ -79,11 +73,13 @@ export async function POST(
       `${gatewayUrl}${OPERATIONS[operation as Operation]}`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        ...(operation === "describe-global" ? {} : {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }),
         cache: "no-store",
         signal: AbortSignal.timeout(
-          operation === "bulk-scan" || operation === "execute"
+          operation === "bulk-scan" || operation === "execute" || operation === "full-assessment"
             ? 300000
             : 120000,
         ),

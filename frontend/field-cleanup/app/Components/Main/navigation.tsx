@@ -5,9 +5,6 @@ import {
   Users,
   FileText,
   ShieldCheck,
-  Scale,
-  DollarSign,
-  OctagonAlert,
   Activity,
   Settings,
   ClipboardList,
@@ -23,10 +20,6 @@ import DependencyViewerPage from "../DependencyViewer/DependencyViewerPage";
 import FieldToolsPage from "../FieldTools/FieldToolsPage";
 import {
   AgentsPage,
-  BoardroomPage,
-  CostsPage,
-  DriftPage,
-  KillSwitchPage,
   OverviewPage,
   PolicyPage,
 } from "../Governance/GovernancePages";
@@ -40,10 +33,6 @@ export const NAV_IDS = [
   "FieldTools",
   "AuditLog",
   "PolicyManager",
-  "DigitalBoardroom",
-  "CostDashboard",
-  "KillSwitch",
-  "DriftMonitor",
   "Settings",
 ] as const;
 
@@ -65,10 +54,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "FieldTools",       label: "Field Tools",        icon: Activity,           Component: FieldToolsPage },
   { id: "AuditLog",         label: "Audit Trail",         icon: FileText,          Component: AuditLogPage },
   { id: "PolicyManager",    label: "Policy Manager",     icon: ShieldCheck,       Component: PolicyPage },
-  { id: "DigitalBoardroom", label: "Digital Boardroom",  icon: Scale,             Component: BoardroomPage },
-  { id: "CostDashboard",    label: "Cost Dashboard",     icon: DollarSign,        Component: CostsPage },
-  { id: "KillSwitch",       label: "Kill Switches",      icon: OctagonAlert,      Component: KillSwitchPage },
-  { id: "DriftMonitor",     label: "Drift Monitor",      icon: Activity,          Component: DriftPage },
   { id: "Settings",         label: "Settings",           icon: Settings,          Component: SettingsPage },
 ];
 

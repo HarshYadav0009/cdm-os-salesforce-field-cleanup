@@ -1,12 +1,12 @@
 "use client";
 
 import { Activity, KeyRound, Server, ShieldCheck } from "lucide-react";
+import { BASE } from "@/app/lib/api/client";
 import { useRealtime } from "@/app/lib/ws/RealtimeProvider";
 
 export default function SettingsPage() {
   const { status } = useRealtime();
-  const apiBase =
-    process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api/v1";
+  const apiBase = BASE;
   const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? "Not configured (no backend WebSocket route)";
 
   return (
@@ -68,19 +68,18 @@ export default function SettingsPage() {
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-blue-300">Agents, tools and audit</h3>
             <ul className="space-y-1 font-mono text-xs text-slate-300">
               <li>GET, POST /agents/</li>
-              <li>GET /agents/{"{agent_id}"}</li>
-              <li>PATCH /agents/{"{agent_id}"}/status?status=PAUSED</li>
-              <li>Valid statuses: IDLE, RUNNING, PAUSED, ERROR, TERMINATED</li>
+
+              <li>PATCH /agents/{"{agent_id}"}/status · JSON body: status</li>
+              <li>Status values are validated by the API</li>
               <li>GET /tools/</li>
-              <li>GET /audit/?limit=50</li>
+              <li>GET /audit/</li>
               <li>POST /audit/verify</li>
               <li>GET /policies/</li>
             </ul>
           </div>
         </div>
         <p className="border-t border-slate-800 px-5 py-3 text-xs leading-5 text-amber-200">
-          Dashboard summary, policy CRUD, boardroom, cost, kill-switch,
-          drift, and WebSocket endpoints are not registered. Audit Trail supports signature verification, CSV download, and printable PDF reports.
+          Audit Trail supports proposal verification, CSV download, and printable PDF reports.
         </p>
       </section>
 

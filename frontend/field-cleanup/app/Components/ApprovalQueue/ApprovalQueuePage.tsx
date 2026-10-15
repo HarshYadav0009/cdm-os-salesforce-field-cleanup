@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, RefreshCw, Search, ShieldCheck } from "lucide-react";
-import ExecutionFollowup from "./ExecutionFollowup";
 import QueueTable, { type QueueRow } from "./QueueTable";
 import RiskAssessmentModal from "./RiskAssessmentModal";
 import { useToast } from "../Toast/useToast";
@@ -12,9 +11,6 @@ import { SourceNotice } from "@/app/Components/Governance/GovernancePages";
 import { usePolling } from "@/app/lib/api/usePolling";
 import { useRealtime } from "@/app/lib/ws/RealtimeProvider";
 import type { Proposal } from "@/types/governance";
-
-const DELETION_POLL_INTERVAL_MS = 500;
-const DELETION_POLL_ATTEMPTS = 90;
 
 function getPayloadValue(
   payload: Record<string, unknown>,
@@ -74,7 +70,6 @@ export default function ApprovalQueuePage() {
   const rows = source.data.map(toQueueRow);
   const [selectedRow, setSelectedRow] = useState<QueueRow | null>(null);
   const [initialDecision, setInitialDecision] = useState<"approve" | "reject" | undefined>();
-  const [executionId, setExecutionId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [tierFilter, setTierFilter] = useState("all");
   const toast = useToast();
@@ -111,92 +106,15 @@ export default function ApprovalQueuePage() {
     [reload, subscribe],
   );
 
-  const handleDecision = async (
-    row: QueueRow,
-    decision: "approve" | "reject",
-    reviewerEmail: string,
-    reason: string,
-  ) => {
+  const handleDecision = async (row: QueueRow, decision: "approve" | "reject", reason: string, reviewerEmail: string) => {
     try {
-      await GovernanceAPI.submitDecision(
-        row.id,
-        decision === "approve" ? "APPROVED" : "REJECTED",
-        reviewerEmail,
-        reason,
-      );
-      source.setData((prev) => prev.filter((proposal) => proposal.id !== row.id));
+      const result = await GovernanceAPI.submitDecision(row.id, decision === "approve" ? "APPROVED" : "REJECTED", reason, reviewerEmail);
+      source.setData((previous) => previous.filter((proposal) => proposal.id !== row.id));
       setSelectedRow(null);
-      if (decision === "approve") {
-        setExecutionId(row.id);
-        try {
-          await GovernanceAPI.executeProposal(row.id);
-          if (row.proposal.tool_id === "salesforce_delete_field") {
-            let completed = false;
-            for (let attempt = 0; attempt < DELETION_POLL_ATTEMPTS; attempt += 1) {
-              await new Promise((resolve) =>
-                window.setTimeout(resolve, DELETION_POLL_INTERVAL_MS),
-              );
-              const current = await GovernanceAPI.getProposal(row.id);
-              if (current.status === "COMPLETED") {
-                const objectName = getPayloadValue(current.input_payload, [
-                  "object_name",
-                  "object_api_name",
-                  "object",
-                  "sobject",
-                ]);
-                const fieldName = getPayloadValue(current.input_payload, [
-                  "field_api_name",
-                  "field_name",
-                  "target_field",
-                  "field",
-                ]);
-                if (objectName && fieldName) {
-                  window.dispatchEvent(
-                    new CustomEvent("salesforce-field-deleted", {
-                      detail: { objectName, fieldName },
-                    }),
-                  );
-                }
-                toast.success(
-                  `Deleted ${objectName ?? row.targetName}.${fieldName ?? row.action}. Dependency Viewer refreshed.`,
-                );
-                completed = true;
-                break;
-              }
-              if (current.status === "FAILED") {
-                throw new Error(
-                  current.error_message || "Salesforce field deletion failed.",
-                );
-              }
-              if (current.status !== "EXECUTING") {
-                throw new Error(
-                  `Deletion entered an unexpected state (${current.status}).`,
-                );
-              }
-            }
-            if (!completed) {
-              toast.info(
-                `Deletion is still running. The Dependency Viewer will refresh when the field deletion completes.`,
-                "Deletion in progress",
-              );
-            }
-            return;
-          }
-        } catch (error) {
-          toast.error(
-            `Proposal was approved, but execution did not complete: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`,
-            "Execution issue",
-          );
-          return;
-        }
-        toast.success(`Approved and dispatched ${row.targetName}:${row.action}`);
-      } else {
-        toast.success(`Rejected ${row.targetName}:${row.action}`);
-      }
+      toast.success(`Decision recorded: ${result.status} at ${result.decided_at}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to record the approval decision.", "Decision not recorded");
+      toast.error(error instanceof Error ? error.message : "Unable to record decision.");
+      throw error;
     }
   };
 
@@ -241,7 +159,6 @@ export default function ApprovalQueuePage() {
         </div>
       </header>
 
-      {executionId && <ExecutionFollowup key={executionId} id={executionId} onDismiss={() => setExecutionId(null)} />}
       <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
         <div className="flex flex-col gap-4 border-b border-slate-800 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -323,11 +240,11 @@ export default function ApprovalQueuePage() {
         row={selectedRow}
         onClose={() => setSelectedRow(null)}
         initialDecision={initialDecision}
-        onApprove={(row, reviewerEmail, reason) =>
-          handleDecision(row, "approve", reviewerEmail, reason)
+        onApprove={(row, reason, reviewerEmail) =>
+          handleDecision(row, "approve", reason, reviewerEmail)
         }
-        onReject={(row, reviewerEmail, reason) =>
-          handleDecision(row, "reject", reviewerEmail, reason)
+        onReject={(row, reason, reviewerEmail) =>
+          handleDecision(row, "reject", reason, reviewerEmail)
         }
       />
     </div>

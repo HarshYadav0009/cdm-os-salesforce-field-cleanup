@@ -27,7 +27,7 @@ export default function AgentCard({
         </span>
       </div>
       <p className="mt-1 text-xs text-slate-400">
-        Tier {agent.tier} · Guardian XXXXXXXX: {agent.guardian}
+        Tier {agent.tier} · Guardian: {agent.guardian}
       </p>
       <p className="mt-1 text-xs text-slate-500">
         Last activity: {agent.lastActivity}

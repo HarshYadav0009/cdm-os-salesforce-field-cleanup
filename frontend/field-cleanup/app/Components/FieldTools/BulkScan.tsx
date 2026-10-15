@@ -25,6 +25,7 @@ export default function BulkScan({
   objects: SalesforceObjectSummary[];
   onInspect: (object: string, field: string) => void;
 }) {
+  const [scanAll, setScanAll] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [threshold, setThreshold] = useState("0");
@@ -69,7 +70,7 @@ export default function BulkScan({
   async function scan() {
     const value = Number(threshold);
     if (
-      !selected.length ||
+      (!scanAll && !selected.length) ||
       threshold.trim() === "" ||
       !Number.isFinite(value) ||
       value < 0 ||
@@ -85,7 +86,7 @@ export default function BulkScan({
     setError(null);
     setResult(null);
     try {
-      const nextResult = await SalesforceAPI.bulkScan(selected, value);
+      const nextResult = await SalesforceAPI.bulkScan(scanAll ? null : selected, value);
       setResult(nextResult);
       setAppliedThreshold(nextResult.threshold_percentage ?? value);
       setFilter("within");
@@ -107,6 +108,12 @@ export default function BulkScan({
         </p>
         <div className="mt-5 grid gap-5 lg:grid-cols-[2fr_1fr]">
           <div className="space-y-3">
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input type="checkbox" checked={scanAll} disabled={running}
+                onChange={(event) => setScanAll(event.target.checked)} />
+              Scan all Salesforce objects
+            </label>
+            {scanAll && <p className="text-xs text-slate-400">All objects will be scanned. The selection below applies when this option is off.</p>}
             <label className="block text-sm text-slate-300">
               Search objects
               <input
@@ -196,7 +203,7 @@ export default function BulkScan({
             </p>
             <button
               className={`${button} w-full`}
-              disabled={running || proposalBusy || !selected.length}
+              disabled={running || proposalBusy || (!scanAll && !selected.length)}
               onClick={() => void scan()}
             >
               {running ? <Busy label="Scanning objects…" /> : "Run bulk scan"}
@@ -237,16 +244,20 @@ export default function BulkScan({
                 are not cleanup candidates; their population and dependency
                 status remain unverified.
               </p>
-              <ul className="mt-4 space-y-3">
+              <ul
+                aria-label="Fields not assessed"
+                tabIndex={0}
+                className="mt-3 flex max-h-[min(50vh,39.5rem)] flex-col gap-2 overflow-y-auto overscroll-contain pr-2 focus-visible:outline-2 focus-visible:outline-blue-400"
+              >
                 {result.skipped_fields?.map((item) => (
                   <li
                     key={`${item.object}.${item.field}`}
-                    className="rounded-lg border border-amber-400/20 p-3 text-sm"
+                    className="shrink-0 rounded-lg border border-amber-400/20 px-3 py-2 text-sm"
                   >
                     <p className="break-words font-medium">
                       {item.object}.{item.field}
                     </p>
-                    <p className="mt-1 break-words text-xs text-slate-400">
+                    <p className="mt-0.5 break-words text-xs text-slate-400">
                       {item.stage}: {item.reason}
                     </p>
                   </li>
@@ -321,7 +332,7 @@ export default function BulkScan({
             </div>
             <p className="mb-3 text-xs text-slate-500">
               Applied maximum: {appliedThreshold}% · {rows.length} matching this
-              view · Scanned {new Date(result.scan_timestamp).toLocaleString()}{" "}
+              view · Scanned {result.scan_timestamp ? new Date(result.scan_timestamp).toLocaleString() : "Time not supplied"}{" "}
               · {Object.keys(result.breakdown_by_object).length} objects
               completed
             </p>
@@ -428,12 +439,12 @@ export default function BulkScan({
                       <td className="px-3 py-3">
                         {item.usage_percentage.toFixed(1)}%
                         <p className="text-xs text-slate-500">
-                          {item.populated_records.toLocaleString()} /{" "}
-                          {item.total_records.toLocaleString()}
+                          {item.populated_records?.toLocaleString() ?? "Not supplied"} /{" "}
+                          {item.total_records?.toLocaleString() ?? "Not supplied"}
                         </p>
                       </td>
                       <td className="px-3 py-3">
-                        {item.reference_count}
+                        {item.reference_count ?? (item.has_references ? "Found · count not supplied" : item.has_references === false ? "None found" : "Not supplied")}
                         <p className="max-w-60 text-xs text-slate-500">
                           {item.reference_summary}
                         </p>
