@@ -89,7 +89,14 @@ SF_USERNAME=your-username@domain.com
 SF_PASSWORD=your-password
 SF_SECURITY_TOKEN=your-token
 SF_DOMAIN=test
+# Optional: explicitly label this org as UAT in the UI
+# SF_ORG_TYPE=UAT
 ```
+
+The header detects Developer Edition, Sandbox, and Production organizations from
+Salesforce organization metadata. Salesforce does not expose a reliable UAT
+classification, so set `SF_ORG_TYPE=UAT` in `.env` to label a UAT sandbox.
+Supported override values are `Developer`, `UAT`, `Sandbox`, and `Production`.
 
 ### Step 5 — Run Local API Services (Manual / Standalone Mode)
 
@@ -151,4 +158,3 @@ docker compose up -d
 # 3. View API & Gateway Logs
 docker compose logs -f control-plane tool-gateway
 ```
-

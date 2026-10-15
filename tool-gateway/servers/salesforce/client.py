@@ -134,6 +134,84 @@ class SalesforceClient:
     def is_mock(self) -> bool:
         return self._mock_mode
 
+    def get_org_type(self) -> str:
+        """Return the configured label or classify the connected Salesforce org."""
+        return self.get_org_details()["org_type"]
+
+    def get_org_details(self) -> Dict[str, Optional[str]]:
+        """Return the configured type and Salesforce organization's display name."""
+        configured_type = os.getenv("SF_ORG_TYPE", "").strip().casefold()
+        org_type_labels = {
+            "developer": "Developer",
+            "uat": "UAT",
+            "sandbox": "Sandbox",
+            "production": "Production",
+        }
+        if configured_type:
+            if configured_type not in org_type_labels:
+                raise ValueError(
+                    "SF_ORG_TYPE must be Developer, UAT, Sandbox, or Production."
+                )
+            org_type = org_type_labels[configured_type]
+        elif self._mock_mode or self.sf is None:
+            org_type = "Mock"
+        else:
+            org_type = ""
+
+        if self._mock_mode or self.sf is None:
+            return {"org_type": org_type or "Mock", "org_name": None}
+
+        organizations = self.sf.query(
+            "SELECT Name, IsSandbox, OrganizationType FROM Organization LIMIT 1"
+        ).get("records", [])
+        if not organizations:
+            raise RuntimeError("Salesforce did not return organization details.")
+
+        organization = organizations[0]
+        if not org_type:
+            if organization.get("IsSandbox"):
+                org_type = "Sandbox"
+            elif organization.get("OrganizationType") == "Developer Edition":
+                org_type = "Developer"
+            else:
+                org_type = "Production"
+        org_name = organization.get("Name")
+        return {
+            "org_type": org_type,
+            "org_name": org_name.strip() if isinstance(org_name, str) and org_name.strip() else None,
+        }
+
+    def get_org_user_name(self) -> str | None:
+        """Return the name of the user authenticated to this Salesforce session."""
+        if self._mock_mode or self.sf is None:
+            return None
+
+        queries = []
+        user_id = getattr(self.sf, "user_id", None)
+        if isinstance(user_id, str) and re.fullmatch(
+            r"[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?", user_id
+        ):
+            queries.append(f"SELECT Name FROM User WHERE Id = '{user_id}' LIMIT 1")
+
+        if isinstance(self.username, str) and self.username.strip():
+            escaped_username = self.username.strip().replace("\\", "\\\\").replace("'", "\\'")
+            queries.append(
+                "SELECT Name FROM User "
+                f"WHERE Username = '{escaped_username}' LIMIT 1"
+            )
+
+        for soql in queries:
+            try:
+                records = self.sf.query(soql).get("records", [])
+            except Exception as error:
+                logger.warning("Unable to query the logged-in Salesforce user's name: %s", error)
+                continue
+            if records and isinstance(records[0].get("Name"), str):
+                return records[0]["Name"]
+
+        logger.warning("Salesforce did not return the logged-in user's full name.")
+        return None
+
     def query(self, soql: str) -> Dict[str, Any]:
         """Execute a read-only SOQL query."""
         if not self._mock_mode and self.sf:

@@ -28,6 +28,21 @@ function StatusBadge({ status }: { status: Proposal["status"] }) {
   );
 }
 
+function TierBadge({ tier }: { tier: Proposal["tier"] }) {
+  const color =
+    tier === "Tier-1"
+      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+      : tier === "Tier-2"
+        ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
+        : "border-rose-500/20 bg-rose-500/10 text-rose-300";
+
+  return (
+    <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold ${color}`}>
+      {tier.replace("-", " ")}
+    </span>
+  );
+}
+
 export default function ProposalsPage() {
   const source = useApiResource<Proposal[]>("/proposals/", []);
   const { reload } = source;
@@ -94,7 +109,7 @@ export default function ProposalsPage() {
                     </td>
                     <td className="px-4 py-3">{proposal.agent_id}</td>
                     <td className="px-4 py-3">{proposal.tool_id}</td>
-                    <td className="px-4 py-3">{proposal.tier}</td>
+                    <td className="px-4 py-3"><TierBadge tier={proposal.tier} /></td>
                     <td className="px-4 py-3"><StatusBadge status={proposal.status} /></td>
                     <td className="whitespace-nowrap px-4 py-3">{formatDate(proposal.created_at)}</td>
                     <td className="px-4 py-3">

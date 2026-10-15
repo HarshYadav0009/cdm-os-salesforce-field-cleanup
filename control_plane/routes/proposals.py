@@ -33,6 +33,38 @@ logger = logging.getLogger("cdm.api.proposals")
 router = APIRouter(prefix="/proposals", tags=["Proposals"])
 
 
+def _payload_identifier(payload: dict, keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip().casefold()
+    return None
+
+
+def _has_pending_field_proposal(
+    db: Session, object_name: str, field_name: str
+) -> bool:
+    pending_proposals = (
+        db.query(Proposal)
+        .filter(Proposal.status == ProposalStatus.PENDING_HUMAN_APPROVAL)
+        .all()
+    )
+
+    requested_object = object_name.strip().casefold()
+    requested_field = field_name.strip().casefold()
+    for proposal in pending_proposals:
+        payload = proposal.input_payload or {}
+        existing_object = _payload_identifier(
+            payload, ("object_name", "object", "sobject", "target")
+        )
+        existing_field = _payload_identifier(
+            payload, ("field_api_name", "field_name", "target_field", "field")
+        )
+        if existing_object == requested_object and existing_field == requested_field:
+            return True
+    return False
+
+
 # ── POST /proposals — Agent submits a new proposal ────────────
 @router.post("", response_model=ProposalResponse, status_code=201, include_in_schema=False)
 @router.post("/", response_model=ProposalResponse, status_code=201)
@@ -79,6 +111,24 @@ def create_proposal(body: ProposalCreate, db: Session = Depends(get_db)):
         status = ProposalStatus.PENDING_HUMAN_APPROVAL
     else:
         status = ProposalStatus.POLICY_APPROVED
+
+    if status == ProposalStatus.PENDING_HUMAN_APPROVAL:
+        object_name = _payload_identifier(
+            body.input_payload, ("object_name", "object", "sobject", "target")
+        )
+        field_name = _payload_identifier(
+            body.input_payload,
+            ("field_api_name", "field_name", "target_field", "field"),
+        )
+        if (
+            object_name
+            and field_name
+            and _has_pending_field_proposal(db, object_name, field_name)
+        ):
+            raise HTTPException(
+                409,
+                "This field is already present in the Approval Queue.",
+            )
 
     # Create proposal record
     proposal = Proposal(
