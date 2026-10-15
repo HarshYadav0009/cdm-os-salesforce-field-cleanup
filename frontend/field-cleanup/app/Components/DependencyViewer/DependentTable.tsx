@@ -1,4 +1,5 @@
 "use client";
+import TablePagination, { useTablePagination } from "@/app/Components/shared/TablePagination";
 
 import { useMemo, useState } from "react";
 import { AlertCircle, Search } from "lucide-react";
@@ -44,6 +45,8 @@ export default function DependentTable({
       return matchesType && matchesQuery;
     });
   }, [dependencies, query, typeFilter]);
+
+  const pagination = useTablePagination(filteredDependencies);
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70">
@@ -167,7 +170,7 @@ export default function DependentTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
-                {filteredDependencies.map((dependency) => (
+                {pagination.visibleRows.map((dependency) => (
                   <tr
                     key={dependency.id}
                     onClick={() => onRowClick?.(dependency)}
@@ -195,7 +198,7 @@ export default function DependentTable({
           </div>
 
           <ul className="max-h-[70vh] divide-y divide-slate-800 overflow-y-auto overscroll-contain md:hidden">
-            {filteredDependencies.map((dependency) => (
+            {pagination.visibleRows.map((dependency) => (
               <li
                 key={dependency.id}
                 onClick={() => onRowClick?.(dependency)}
@@ -224,12 +227,7 @@ export default function DependentTable({
           </ul>
         </>
       )}
-      {filteredDependencies.length > 0 && (
-        <footer className="border-t border-slate-800 px-4 py-2.5 text-[10px] text-slate-600 sm:px-5">
-          Showing {filteredDependencies.length} of {dependencies.length}{" "}
-          references
-        </footer>
-      )}
+      {!error && <TablePagination {...pagination} label="Dependency pagination" />}
     </section>
   );
 }

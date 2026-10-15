@@ -60,10 +60,10 @@ d:\rdc-os-salesforce-field-cleanup\
 │       └── salesforce/          # Salesforce metadata & tooling API integration
 │           └── README.md        # Salesforce MCP server details
 │
-├── frontend/                    # Governance UI (React / Vite)
+├── frontend/                    # Governance UI (Next.js / React)
 │   ├── README.md                # Governance dashboard documentation
-│   └── governance-ui/           # React single-page application source
-│       └── README.md            # React app documentation
+│   └── field-cleanup/           # Active Next.js dashboard source
+│       └── README.md            # Next.js app documentation
 │
 ├── agents/                      # Registered Autonomous Agent configurations
 │   ├── README.md                # Agent runtime architecture documentation

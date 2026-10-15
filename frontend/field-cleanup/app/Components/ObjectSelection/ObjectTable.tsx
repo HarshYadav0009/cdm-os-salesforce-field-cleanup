@@ -1,4 +1,5 @@
 "use client";
+import TablePagination, { useTablePagination } from "@/app/Components/shared/TablePagination";
 
 import type { SalesforceObject } from "./ObjectSelectionPage";
 
@@ -6,7 +7,7 @@ interface ObjectTableProps {
   objects: SalesforceObject[];
   selectedIds: string[];
   onToggle: (id: string) => void;
-  onToggleAll: () => void;
+  onToggleAll: (ids: string[], checked: boolean) => void;
   onInitiate: () => void;
 }
 
@@ -17,10 +18,11 @@ export default function ObjectTable({
   onToggleAll,
   onInitiate,
 }: ObjectTableProps) {
+  const pagination = useTablePagination(objects);
   const allChecked =
-    objects.length > 0 && selectedIds.length === objects.length;
+    pagination.visibleRows.length > 0 && pagination.visibleRows.every((object) => selectedIds.includes(object.id));
   const someChecked =
-    selectedIds.length > 0 && selectedIds.length < objects.length;
+    pagination.visibleRows.some((object) => selectedIds.includes(object.id)) && !allChecked;
   const noSelection = selectedIds.length === 0;
 
   return (
@@ -37,8 +39,8 @@ export default function ObjectTable({
                   ref={(el) => {
                     if (el) el.indeterminate = someChecked;
                   }}
-                  onChange={onToggleAll}
-                  aria-label="Select all"
+                  onChange={(event) => onToggleAll(pagination.visibleRows.map((object) => object.id), event.target.checked)}
+                  aria-label="Select all objects on this page"
                   className="h-4 w-4 cursor-pointer accent-blue-500"
                 />
               </th>
@@ -60,7 +62,7 @@ export default function ObjectTable({
               </tr>
             )}
 
-            {objects.map((obj) => (
+            {pagination.visibleRows.map((obj) => (
               <tr
                 key={obj.id}
                 className="border-b border-slate-800 transition-colors last:border-0 hover:bg-slate-800/50"
@@ -94,10 +96,11 @@ export default function ObjectTable({
         </table>
       </div>
 
+      <TablePagination {...pagination} />
       {/* Footer / Action */}
       <div className="flex flex-col items-stretch gap-2 border-t border-slate-700 p-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-slate-400 sm:text-sm">
-          {selectedIds.length} of {objects.length} selected
+          {selectedIds.length} objects selected
         </p>
         <button
           onClick={onInitiate}

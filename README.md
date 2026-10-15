@@ -206,6 +206,7 @@ cdm-os-salesforce-field-cleanup/
 │   └── onboarding/               #   Getting started guides
 │
 └── frontend/                     # LAYER 1 — Guardian dashboard UI
+    └── field-cleanup/            #   Active Next.js dashboard
 ```
 
 ---
@@ -354,10 +355,10 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines, coding stan
 
 ## Next.js Governance UI
 
-The active dashboard is in `field-cleanup/` (Next.js), replacing the planned Vite UI in `frontend/`.
+The active dashboard is in `frontend/field-cleanup/` (Next.js).
 
 ```sh
-cd field-cleanup
+cd frontend/field-cleanup
 npm install
 npm run dev
 ```

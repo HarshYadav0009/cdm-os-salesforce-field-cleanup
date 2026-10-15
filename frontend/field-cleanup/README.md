@@ -1,6 +1,6 @@
 # CDM-OS — Next.js Governance UI
 
-`field-cleanup/` is the active dashboard, replacing the Vite UI planned under `frontend/`. It uses Next.js App Router, React, TypeScript, Tailwind CSS, and Lucide icons. The dashboard provides Salesforce field assessment, governed cleanup proposals, human review, and audit reporting.
+`frontend/field-cleanup/` is the active dashboard. It uses Next.js App Router, React, TypeScript, Tailwind CSS, and Lucide icons. The dashboard provides Salesforce field assessment, governed cleanup proposals, human review, and audit reporting.
 
 ## How the application works
 
@@ -47,7 +47,7 @@ Compose starts PostgreSQL on 5432, Redis on 6379, the control plane on 8000, and
 
 ### 2. Configure the UI
 
-Create `field-cleanup/.env.local` with these local defaults:
+Create `frontend/field-cleanup/.env.local` with these local defaults:
 
 ```dotenv
 NEXT_PUBLIC_API_BASE=http://localhost:8000/api/v1
@@ -70,7 +70,7 @@ The gateway defaults to `http://127.0.0.1:8080`. The bundled backend has no WebS
 In a separate terminal, from the repository root:
 
 ```sh
-cd field-cleanup
+cd frontend/field-cleanup
 npm ci
 npm run dev
 ```
@@ -90,7 +90,7 @@ The Salesforce status reports whether the connection uses mock data. A successfu
 
 ### Production-mode UI
 
-From `field-cleanup/`, with backend services running:
+From `frontend/field-cleanup/`, with backend services running:
 
 ```sh
 npm run build
@@ -98,6 +98,8 @@ npm run start
 ```
 
 Builds may require network access to fetch the Google fonts configured in `app/layout.tsx`. `NEXT_PUBLIC_*` values are included in the browser build; rebuild after changing them.
+
+All data tables show at most 15 rows per page with Previous/Next controls. Mobile card views use the same page. Filters restart pagination when the matching rows change; audit exports still include all filtered records.
 
 ## Dashboard workflows
 
@@ -126,17 +128,21 @@ Backups preserve metadata. Recovery restores a description only; it does not res
 
 ### Approval Queue
 
+Open `/approvals` directly or use the sidebar.
+
 Pending proposals show their target, tool, and tier. Open the evidence dialog to load current metadata, population, and dependency details. These checks are **live evidence**, not a stored snapshot from proposal submission; incomplete checks are shown explicitly.
 
 Enter a reviewer email and an audited reason (at least eight characters), then approve or reject. Approval dispatches execution; rejection does not execute or roll back a change. The latest approved execution panel refreshes every three seconds and displays failures or results. Reviewer email is currently self-reported, not an authenticated identity.
 
 ### Proposals
 
-Filter by status and browse 20 records per page. Mobile cards and desktop tables open the same detail dialog. Details include policy decisions, human decisions, execution errors/results, and an audit activity timeline. Approved proposals can be dispatched using **Execute approved proposal**.
+Filter by status and browse 15 records per page. Mobile cards and desktop tables open the same detail dialog. Details include policy decisions, human decisions, execution errors/results, and an audit activity timeline. Approved proposals can be dispatched using **Execute approved proposal**.
 
 The list and timeline refresh every ten seconds while the browser tab is visible. Failed proposals are not automatically retried: inspect Salesforce state and the error before creating a new proposal. Previously denied proposals retain their recorded decision.
 
 ### Audit Trail and compliance reports
+
+Open `/audit` directly or use the sidebar. Signature badges show the first 16 characters; the copy button copies the full HMAC SHA-256 signature and reports clipboard errors.
 
 Search/filter the latest 500 audit records by date, actor, action, and content. Open an event to inspect its payload and signature.
 
@@ -176,7 +182,7 @@ Next.js exposes `/api/control-plane/health`, `/api/salesforce/health`, `/api/sal
 
 ### Frontend checks
 
-From `field-cleanup/`:
+From `frontend/field-cleanup/`:
 
 ```sh
 npm test

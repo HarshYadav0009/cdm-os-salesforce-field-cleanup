@@ -31,17 +31,17 @@ Therefore, a frontend can truthfully display registered proposals, make approval
 
 | Component | Implemented responsibility | Evidence |
 |---|---|---|
-| Agent configuration | Declares model settings, allowed Salesforce tools/tiers, and instructions to inspect references and submit proposals rather than delete directly. | [`agents/field-cleanup/config.yaml`](../agents/field-cleanup/config.yaml) |
-| Agent runtime analyzer | Calls the Tool Gateway to describe an object, query field population, verify the field exists, optionally scan references, and return analysis plus `safe_for_cleanup`. | [`agent-runtime/analysis/field_analyzer.py`](../agent-runtime/analysis/field_analyzer.py) |
-| Salesforce Tool Gateway | Exposes MCP operations for metadata, usage, reference scans, backups, deprecation, rollback, and bulk scans. | [`tool-gateway/servers/salesforce/server.py`](../tool-gateway/servers/salesforce/server.py), [`tool-gateway/servers/salesforce/mcp_client.py`](../tool-gateway/servers/salesforce/mcp_client.py) |
-| HTTP Tool Gateway | Exposes REST endpoints on the gateway service for the same operations, including `/tools/salesforce/bulk-scan` and `/tools/execute`. | [`tool-gateway/gateway/api.py`](../tool-gateway/gateway/api.py), [`tool-gateway/gateway/service.py`](../tool-gateway/gateway/service.py) |
-| Analysis workflow | Calls describe, usage, reference scan, and precedent lookup, then passes evidence to a proposal builder. There are two similarly named workflow implementations. | [`tool-gateway/workflows/field_cleanup.py`](../tool-gateway/workflows/field_cleanup.py), [`tool-gateway/servers/workflows/field_cleanup.py`](../tool-gateway/servers/workflows/field_cleanup.py) |
-| Proposal builder | Converts evidence into a structured `FIELD_CLEANUP` proposal with field metadata, usage/reference/precedent evidence, risk, recommended action, and approval fields. | [`tool-gateway/proposals/field_cleanup.py`](../tool-gateway/proposals/field_cleanup.py) |
-| Proposal submission client | Posts `{agent_id, tool_id, input_payload}` to Control Plane `POST /api/v1/proposals/`. It is a utility, not currently called by the analysis workflow. | [`tool-gateway/proposals/proposal_service.py`](../tool-gateway/proposals/proposal_service.py) |
-| Control Plane | Registers agents/tools, evaluates proposal policy, stores proposal status, accepts human decisions, dispatches a limited set of executions, and serves audit/proposal APIs. | [`control_plane/main.py`](../control_plane/main.py), [`control_plane/routes/proposals.py`](../control_plane/routes/proposals.py) |
-| Policy engine | Loads YAML policy rules; Tier-1 proposals are implicitly allowed, Tier-3 proposals require human approval, and matching rules may deny or require human approval. | [`control_plane/policy_engine.py`](../control_plane/policy_engine.py) |
-| Audit | Records HMAC-SHA256-signed events in the audit database and provides a read API. | [`control_plane/audit.py`](../control_plane/audit.py), [`control_plane/routes/audit.py`](../control_plane/routes/audit.py) |
-| Deployment | Compose starts Postgres, Redis, Control Plane on port 8000, and HTTP Tool Gateway on port 8080. It does not start an agent runtime or workflow engine. | [`docker-compose.yml`](../docker-compose.yml) |
+| Agent configuration | Declares model settings, allowed Salesforce tools/tiers, and instructions to inspect references and submit proposals rather than delete directly. | [`agents/field-cleanup/config.yaml`](../../agents/field-cleanup/config.yaml) |
+| Agent runtime analyzer | Calls the Tool Gateway to describe an object, query field population, verify the field exists, optionally scan references, and return analysis plus `safe_for_cleanup`. | [`agent-runtime/analysis/field_analyzer.py`](../../agent-runtime/analysis/field_analyzer.py) |
+| Salesforce Tool Gateway | Exposes MCP operations for metadata, usage, reference scans, backups, deprecation, rollback, and bulk scans. | [`tool-gateway/servers/salesforce/server.py`](../../tool-gateway/servers/salesforce/server.py), [`tool-gateway/servers/salesforce/mcp_client.py`](../../tool-gateway/servers/salesforce/mcp_client.py) |
+| HTTP Tool Gateway | Exposes REST endpoints on the gateway service for the same operations, including `/tools/salesforce/bulk-scan` and `/tools/execute`. | [`tool-gateway/gateway/api.py`](../../tool-gateway/gateway/api.py), [`tool-gateway/gateway/service.py`](../../tool-gateway/gateway/service.py) |
+| Analysis workflow | Calls describe, usage, reference scan, and precedent lookup, then passes evidence to a proposal builder. There are two similarly named workflow implementations. | [`tool-gateway/workflows/field_cleanup.py`](../../tool-gateway/workflows/field_cleanup.py), [`tool-gateway/servers/workflows/field_cleanup.py`](../../tool-gateway/servers/workflows/field_cleanup.py) |
+| Proposal builder | Converts evidence into a structured `FIELD_CLEANUP` proposal with field metadata, usage/reference/precedent evidence, risk, recommended action, and approval fields. | [`tool-gateway/proposals/field_cleanup.py`](../../tool-gateway/proposals/field_cleanup.py) |
+| Proposal submission client | Posts `{agent_id, tool_id, input_payload}` to Control Plane `POST /api/v1/proposals/`. It is a utility, not currently called by the analysis workflow. | [`tool-gateway/proposals/proposal_service.py`](../../tool-gateway/proposals/proposal_service.py) |
+| Control Plane | Registers agents/tools, evaluates proposal policy, stores proposal status, accepts human decisions, dispatches a limited set of executions, and serves audit/proposal APIs. | [`control_plane/main.py`](../../control_plane/main.py), [`control_plane/routes/proposals.py`](../../control_plane/routes/proposals.py) |
+| Policy engine | Loads YAML policy rules; Tier-1 proposals are implicitly allowed, Tier-3 proposals require human approval, and matching rules may deny or require human approval. | [`control_plane/policy_engine.py`](../../control_plane/policy_engine.py) |
+| Audit | Records HMAC-SHA256-signed events in the audit database and provides a read API. | [`control_plane/audit.py`](../../control_plane/audit.py), [`control_plane/routes/audit.py`](../../control_plane/routes/audit.py) |
+| Deployment | Compose starts Postgres, Redis, Control Plane on port 8000, and HTTP Tool Gateway on port 8080. It does not start an agent runtime or workflow engine. | [`docker-compose.yml`](../../docker-compose.yml) |
 
 ## Actual data flow in the code
 
@@ -105,10 +105,10 @@ Audit entries are HMAC-signed over each event payload and returned by `GET /api/
 
 The repository has two distinct workflow descriptions:
 
-- [`workflows/sample_deletion_approval_workflow.yaml`](../workflows/sample_deletion_approval_workflow.yaml) describes a Tier-3 delete approval flow with Jira ticket creation, Slack notification, role-based approval, a 48-hour timeout, conditional execution, and rejection audit.
-- [`workflows/README.md`](../workflows/README.md) contains an example field-cleanup state machine with scan → analyze → propose → Guardian approval → execute → verify → audit, plus timeout escalation and retry settings.
+- [`workflows/sample_deletion_approval_workflow.yaml`](../../workflows/sample_deletion_approval_workflow.yaml) describes a Tier-3 delete approval flow with Jira ticket creation, Slack notification, role-based approval, a 48-hour timeout, conditional execution, and rejection audit.
+- [`workflows/README.md`](../../workflows/README.md) contains an example field-cleanup state machine with scan → analyze → propose → Guardian approval → execute → verify → audit, plus timeout escalation and retry settings.
 
-The docs refer to a Workflow Engine in `control-plane/workflow/`, and [`control-plane/workflow/README.md`](../control-plane/workflow/README.md) describes durable state, checkpoint/resume, retries, and approval gates. In the fetched file listing, that folder contains only the README: no engine, schema, retry manager, state store, orchestrator, runner, or workflow API implementation is present. The YAML is therefore **declared, not executed** by the current code.
+The docs refer to a Workflow Engine in `control-plane/workflow/`, and [`control-plane/workflow/README.md`](../../control-plane/workflow/README.md) describes durable state, checkpoint/resume, retries, and approval gates. In the fetched file listing, that folder contains only the README: no engine, schema, retry manager, state store, orchestrator, runner, or workflow API implementation is present. The YAML is therefore **declared, not executed** by the current code.
 
 ## Material implementation gaps and inconsistencies
 
@@ -235,27 +235,27 @@ This future flow is a UI/backend design recommendation based on repository compo
 
 ## Key source files (outside `field-cleanup/`)
 
-- [`agents/field-cleanup/config.yaml`](../agents/field-cleanup/config.yaml)
-- [`agent-runtime/analysis/field_analyzer.py`](../agent-runtime/analysis/field_analyzer.py)
-- [`agent-runtime/tools/tool_gateway_client.py`](../agent-runtime/tools/tool_gateway_client.py)
-- [`tool-gateway/workflows/field_cleanup.py`](../tool-gateway/workflows/field_cleanup.py)
-- [`tool-gateway/servers/workflows/field_cleanup.py`](../tool-gateway/servers/workflows/field_cleanup.py)
-- [`tool-gateway/proposals/field_cleanup.py`](../tool-gateway/proposals/field_cleanup.py)
-- [`tool-gateway/proposals/proposal_service.py`](../tool-gateway/proposals/proposal_service.py)
-- [`tool-gateway/servers/salesforce/server.py`](../tool-gateway/servers/salesforce/server.py)
-- [`tool-gateway/servers/salesforce/field_usage.py`](../tool-gateway/servers/salesforce/field_usage.py)
-- [`tool-gateway/servers/salesforce/apex_scanner.py`](../tool-gateway/servers/salesforce/apex_scanner.py)
-- [`tool-gateway/servers/salesforce/bulk_scanner.py`](../tool-gateway/servers/salesforce/bulk_scanner.py)
-- [`tool-gateway/servers/salesforce/deprecation_service.py`](../tool-gateway/servers/salesforce/deprecation_service.py)
-- [`tool-gateway/gateway/api.py`](../tool-gateway/gateway/api.py)
-- [`tool-gateway/gateway/service.py`](../tool-gateway/gateway/service.py)
-- [`control_plane/routes/proposals.py`](../control_plane/routes/proposals.py)
-- [`control_plane/policy_engine.py`](../control_plane/policy_engine.py)
-- [`control_plane/audit.py`](../control_plane/audit.py)
-- [`control_plane/routes/audit.py`](../control_plane/routes/audit.py)
-- [`policy/definitions/sample_field_cleanup_policy.yaml`](../policy/definitions/sample_field_cleanup_policy.yaml)
-- [`workflows/sample_deletion_approval_workflow.yaml`](../workflows/sample_deletion_approval_workflow.yaml)
-- [`workflows/README.md`](../workflows/README.md)
-- [`control-plane/workflow/README.md`](../control-plane/workflow/README.md)
-- [`docker-compose.yml`](../docker-compose.yml)
-- [`test_integration.py`](../test_integration.py)
+- [`agents/field-cleanup/config.yaml`](../../agents/field-cleanup/config.yaml)
+- [`agent-runtime/analysis/field_analyzer.py`](../../agent-runtime/analysis/field_analyzer.py)
+- [`agent-runtime/tools/tool_gateway_client.py`](../../agent-runtime/tools/tool_gateway_client.py)
+- [`tool-gateway/workflows/field_cleanup.py`](../../tool-gateway/workflows/field_cleanup.py)
+- [`tool-gateway/servers/workflows/field_cleanup.py`](../../tool-gateway/servers/workflows/field_cleanup.py)
+- [`tool-gateway/proposals/field_cleanup.py`](../../tool-gateway/proposals/field_cleanup.py)
+- [`tool-gateway/proposals/proposal_service.py`](../../tool-gateway/proposals/proposal_service.py)
+- [`tool-gateway/servers/salesforce/server.py`](../../tool-gateway/servers/salesforce/server.py)
+- [`tool-gateway/servers/salesforce/field_usage.py`](../../tool-gateway/servers/salesforce/field_usage.py)
+- [`tool-gateway/servers/salesforce/apex_scanner.py`](../../tool-gateway/servers/salesforce/apex_scanner.py)
+- [`tool-gateway/servers/salesforce/bulk_scanner.py`](../../tool-gateway/servers/salesforce/bulk_scanner.py)
+- [`tool-gateway/servers/salesforce/deprecation_service.py`](../../tool-gateway/servers/salesforce/deprecation_service.py)
+- [`tool-gateway/gateway/api.py`](../../tool-gateway/gateway/api.py)
+- [`tool-gateway/gateway/service.py`](../../tool-gateway/gateway/service.py)
+- [`control_plane/routes/proposals.py`](../../control_plane/routes/proposals.py)
+- [`control_plane/policy_engine.py`](../../control_plane/policy_engine.py)
+- [`control_plane/audit.py`](../../control_plane/audit.py)
+- [`control_plane/routes/audit.py`](../../control_plane/routes/audit.py)
+- [`policy/definitions/sample_field_cleanup_policy.yaml`](../../policy/definitions/sample_field_cleanup_policy.yaml)
+- [`workflows/sample_deletion_approval_workflow.yaml`](../../workflows/sample_deletion_approval_workflow.yaml)
+- [`workflows/README.md`](../../workflows/README.md)
+- [`control-plane/workflow/README.md`](../../control-plane/workflow/README.md)
+- [`docker-compose.yml`](../../docker-compose.yml)
+- [`test_integration.py`](../../test_integration.py)

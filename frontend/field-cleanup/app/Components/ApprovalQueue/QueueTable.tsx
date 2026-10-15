@@ -1,4 +1,5 @@
 "use client";
+import TablePagination, { useTablePagination } from "@/app/Components/shared/TablePagination";
 import styles from "./DecisionControls.module.css";
 
 import { ArrowUpRight, Check, FileSearch, LoaderCircle, X } from "lucide-react";
@@ -33,6 +34,7 @@ export default function QueueTable({
   onApprove,
   onReject,
 }: QueueTableProps) {
+  const pagination = useTablePagination(rows);
   if (rows.length === 0) {
     return (
       <div className="flex min-h-64 flex-col items-center justify-center px-6 py-12 text-center">
@@ -66,7 +68,7 @@ export default function QueueTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/80">
-            {rows.map((row) => (
+            {pagination.visibleRows.map((row) => (
               <tr
                 key={row.id}
                 className="align-middle transition-colors hover:bg-slate-800/30"
@@ -107,7 +109,7 @@ export default function QueueTable({
       </div>
 
       <ul className="divide-y divide-slate-800 md:hidden">
-        {rows.map((row) => (
+        {pagination.visibleRows.map((row) => (
           <li key={row.id} className="space-y-4 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -135,6 +137,7 @@ export default function QueueTable({
           </li>
         ))}
       </ul>
+      <TablePagination {...pagination} />
     </div>
   );
 }

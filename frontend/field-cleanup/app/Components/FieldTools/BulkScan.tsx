@@ -1,4 +1,5 @@
 "use client";
+import TablePagination, { useTablePagination } from "@/app/Components/shared/TablePagination";
 
 import { useState } from "react";
 import BulkProposals, { fieldKey } from "./BulkProposals";
@@ -60,6 +61,7 @@ export default function BulkScan({
             .includes(fieldSearch.toLowerCase()),
       )
     : [];
+  const pagination = useTablePagination(rows);
   const skipped =
     result?.objects_scanned.filter(
       (name) => !Object.hasOwn(result.breakdown_by_object, name),
@@ -341,20 +343,20 @@ export default function BulkScan({
                       <input
                         type="checkbox"
                         aria-label="Select all visible fields"
-                        disabled={proposalBusy || !rows.length}
+                        disabled={proposalBusy || !pagination.visibleRows.length}
                         checked={
-                          rows.length > 0 &&
-                          rows.every((item) =>
+                          pagination.visibleRows.length > 0 &&
+                          pagination.visibleRows.every((item) =>
                             selectedFields.includes(fieldKey(item)),
                           )
                         }
                         ref={(node) => {
                           if (node)
                             node.indeterminate =
-                              rows.some((item) =>
+                              pagination.visibleRows.some((item) =>
                                 selectedFields.includes(fieldKey(item)),
                               ) &&
-                              !rows.every((item) =>
+                              !pagination.visibleRows.every((item) =>
                                 selectedFields.includes(fieldKey(item)),
                               );
                         }}
@@ -362,11 +364,11 @@ export default function BulkScan({
                           setSelectedFields((current) =>
                             event.target.checked
                               ? Array.from(
-                                  new Set([...current, ...rows.map(fieldKey)]),
+                                  new Set([...current, ...pagination.visibleRows.map(fieldKey)]),
                                 )
                               : current.filter(
                                   (key) =>
-                                    !rows.some(
+                                    !pagination.visibleRows.some(
                                       (item) => fieldKey(item) === key,
                                     ),
                                 ),
@@ -388,7 +390,7 @@ export default function BulkScan({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((item) => (
+                  {pagination.visibleRows.map((item) => (
                     <tr
                       key={`${item.object}.${item.field}`}
                       className="border-b border-white/5"
@@ -452,6 +454,7 @@ export default function BulkScan({
                 </tbody>
               </table>
             </div>
+            <TablePagination {...pagination} label="Bulk scan pagination" />
             {!rows.length && (
               <p className="py-8 text-center text-sm text-slate-400">
                 No fields match this filter.

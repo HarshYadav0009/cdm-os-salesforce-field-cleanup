@@ -48,7 +48,7 @@ function TierBadge({ tier }: { tier: Proposal["tier"] }) {
 export default function ProposalsPage() {
   const [page, setPage] = useState(0);
   const [status, setStatus] = useState("");
-  const source = useApiResource<Proposal[]>(`/proposals/?limit=20&offset=${page * 20}${status ? `&status=${status}` : ""}`, []);
+  const source = useApiResource<Proposal[]>(`/proposals/?limit=15&offset=${page * 15}${status ? `&status=${status}` : ""}`, []);
   const { reload } = source;
   usePolling(reload);
   const { subscribe } = useRealtime();
@@ -158,7 +158,7 @@ export default function ProposalsPage() {
         <p aria-live="polite" className="text-xs text-slate-400">Page {page + 1} · {source.data.length} proposals</p>
         <div className="flex gap-2">
           <button type="button" disabled={page === 0 || source.loading} onClick={() => { setPage((value) => value - 1); setSelectedProposalId(null); }} className="min-h-11 rounded-lg border border-slate-700 px-4 text-sm disabled:opacity-40">Previous</button>
-          <button type="button" disabled={source.data.length < 20 || source.loading || !!source.error} onClick={() => { setPage((value) => value + 1); setSelectedProposalId(null); }} className="min-h-11 rounded-lg border border-slate-700 px-4 text-sm disabled:opacity-40">Next</button>
+          <button type="button" disabled={source.data.length < 15 || source.loading || !!source.error} onClick={() => { setPage((value) => value + 1); setSelectedProposalId(null); }} className="min-h-11 rounded-lg border border-slate-700 px-4 text-sm disabled:opacity-40">Next</button>
         </div>
       </nav>
       {selectedProposal && (
