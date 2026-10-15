@@ -5,19 +5,21 @@ import {
   Activity,
   ArrowUpRight,
   Bot,
+  CircleAlert,
   Clock3,
-  Loader2, // ← add
+  Loader2,
   Pause,
   Play,
-  Plus, // ← add
-  RotateCcw,
-  Search, // ← add
+  Plus,
+  Search,
+  RefreshCw,
   ShieldCheck,
   X,
 } from "lucide-react";
 import { api } from "@/app/lib/api/client";
 import { useApiResource } from "@/app/lib/api/useApiResource";
 import { GovernanceAPI } from "@/app/lib/api/governance";
+import type { PolicyConfiguration, PolicyRule } from "@/app/lib/api/governance";
 import { useRealtime } from "@/app/lib/ws/RealtimeProvider";
 import { useToast } from "@/app/Components/Toast/useToast";
 import type {
@@ -225,16 +227,145 @@ function StatusBadge({ status }: { status: AgentStatus }) {
         ? "bg-red-500/10 text-red-300"
         : status === "PAUSED"
           ? "bg-amber-400/10 text-amber-300"
+            : status === "TERMINATED"
+              ? "bg-rose-500/10 text-rose-300"
           : "bg-slate-700/70 text-slate-300";
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone}`}
     >
       <span
-        className={`h-1.5 w-1.5 rounded-full ${status === "RUNNING" ? "bg-emerald-400" : status === "ERROR" ? "bg-red-400" : status === "PAUSED" ? "bg-amber-400" : "bg-slate-400"}`}
+        className={`h-1.5 w-1.5 rounded-full ${status === "RUNNING" ? "bg-emerald-400" : status === "ERROR" ? "bg-red-400" : status === "PAUSED" ? "bg-amber-400" : status === "TERMINATED" ? "bg-rose-400" : "bg-slate-400"}`}
       />
       {status}
     </span>
+  );
+}
+
+function RegisteredToolsPanel({
+  tools,
+  loading = false,
+  error = null,
+}: {
+  tools: ToolDefinition[];
+  loading?: boolean;
+  error?: string | null;
+}) {
+  const getTierClasses = (tier: ToolDefinition["tier"]) => {
+    if (tier === "Tier-1") {
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+    }
+    if (tier === "Tier-2") {
+      return "border-amber-500/30 bg-amber-500/10 text-amber-200";
+    }
+    return "border-violet-500/30 bg-violet-500/10 text-violet-200";
+  };
+
+  if (loading) {
+    return (
+      <section className="rounded-xl border border-slate-800 bg-slate-900/80">
+        <header className="border-b border-slate-800 px-5 py-4">
+          <h2 className="text-sm font-semibold text-slate-100">
+            Registered tools
+          </h2>
+        </header>
+        <div className="p-5 text-sm text-slate-400">Loading tools…</div>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="rounded-xl border border-slate-800 bg-slate-900/80">
+        <header className="border-b border-slate-800 px-5 py-4">
+          <h2 className="text-sm font-semibold text-slate-100">
+            Registered tools
+          </h2>
+        </header>
+        <div className="p-5 text-sm text-rose-300">{error}</div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/80">
+      <header className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-100">
+            Registered tools
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Tools exposed by the control plane
+          </p>
+        </div>
+        <span className="rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-300">
+          {tools.length} total
+        </span>
+      </header>
+
+      <div className="max-h-[360px] overflow-y-auto overflow-x-auto">
+        <table className="w-full min-w-[900px] border-separate border-spacing-0 text-left text-sm">
+          <thead className="sticky top-0 z-10 bg-slate-950/95 text-[11px] uppercase tracking-wide text-slate-400 backdrop-blur-sm">
+            <tr>
+              <th className="px-4 py-3 text-center font-medium">Tool</th>
+              <th className="px-4 py-3 text-center font-medium">ID</th>
+              <th className="px-4 py-3 text-center font-medium">Tier</th>
+              <th className="px-4 py-3 text-center font-medium">MCP server</th>
+              <th className="px-4 py-3 text-center font-medium">Description</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800">
+            {tools.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={5}
+                  className="px-4 py-8 text-center text-sm text-slate-400"
+                >
+                  No tools registered.
+                </td>
+              </tr>
+            ) : (
+              tools.map((tool) => (
+                <tr
+                  key={tool.id}
+                  className="align-middle hover:bg-slate-800/40"
+                >
+                  <td className="border-t border-slate-800 px-4 py-3 align-middle">
+                    <div className="whitespace-nowrap font-medium text-slate-100">
+                      {tool.name}
+                    </div>
+                  </td>
+
+                  <td className="border-t border-slate-800 px-4 py-3 align-middle font-mono text-[11px] text-slate-300">
+                    <div className="whitespace-nowrap">{tool.tool_id}</div>
+                  </td>
+
+                  <td className="border-t border-slate-800 px-4 py-3 text-center align-middle">
+                    <span
+                      className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getTierClasses(tool.tier)}`}
+                    >
+                      {tool.tier}
+                    </span>
+                  </td>
+
+                  <td className="border-t border-slate-800 px-4 py-3 align-middle text-xs text-slate-300">
+                    <div className="whitespace-nowrap">
+                      {tool.mcp_server || "—"}
+                    </div>
+                  </td>
+
+                  <td className="border-t border-slate-800 px-4 py-3 align-middle text-sm text-slate-300">
+                    <div className="max-w-md leading-6">
+                      {tool.description || "No description provided"}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -421,6 +552,11 @@ export function OverviewPage() {
           tone="blue"
         />
       </div>
+      <RegisteredToolsPanel
+        tools={toolsSource.data}
+        loading={toolsSource.loading}
+        error={toolsSource.error}
+      />
       <div className="grid gap-5 xl:grid-cols-[1.45fr_1fr]">
         <Panel
           title="Agent fleet"
@@ -550,6 +686,7 @@ export function AgentsPage() {
   const [activeQuery, setActiveQuery] = useState("");
   const [searchError, setSearchError] = useState("");
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState<AgentStatus | null>(null);
 
   // Swap endpoint when a query is active
   const source = useApiResource<ControlPlaneAgent[] | ControlPlaneAgent>(
@@ -605,13 +742,10 @@ export function AgentsPage() {
     setSearchError("");
   };
 
-  const updateAgent = async (
-    agent: Agent,
-    action: "pause" | "resume" | "start" | "restart",
-  ) => {
+  const updateAgentStatus = async (agent: Agent, nextStatus: AgentStatus) => {
     if (updatingAgentId) return;
     setUpdatingAgentId(agent.id);
-    const nextStatus = action === "pause" ? "PAUSED" : "RUNNING";
+    setUpdatingStatus(nextStatus);
     try {
       await GovernanceAPI.updateAgentStatus(agent.agent_id, nextStatus);
       await source.reload();
@@ -628,18 +762,9 @@ export function AgentsPage() {
       );
     } finally {
       setUpdatingAgentId(null);
+      setUpdatingStatus(null);
     }
   };
-  const statusAction =
-    selected?.status === "RUNNING"
-      ? "pause"
-      : selected?.status === "PAUSED"
-        ? "resume"
-        : selected?.status === "IDLE"
-          ? "start"
-          : selected?.status === "TERMINATED"
-            ? "restart"
-            : null;
   const isUpdating = selected?.id === updatingAgentId;
 
   return (
@@ -791,44 +916,13 @@ export function AgentsPage() {
               {/* <Detail label="Tier" value={selected.tier} /> */}
             </dl>
 
-            <div className="mt-5 flex justify-center border-t border-slate-800 pt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  if (statusAction) void updateAgent(selected, statusAction);
-                }}
-                disabled={!statusAction || Boolean(updatingAgentId)}
-                className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3.5 py-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                  selected.status === "PAUSED" ||
-                  selected.status === "IDLE" ||
-                  selected.status === "TERMINATED"
-                    ? "bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
-                    : "bg-amber-500/15 text-amber-200 hover:bg-amber-500/25"
-                }`}
-              >
-                {isUpdating ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : selected.status === "PAUSED" ||
-                  selected.status === "IDLE" ? (
-                  <Play className="h-3.5 w-3.5" />
-                ) : selected.status === "TERMINATED" ? (
-                  <RotateCcw className="h-3.5 w-3.5" />
-                ) : (
-                  <Pause className="h-3.5 w-3.5" />
-                )}
-                {isUpdating
-                  ? "Updating status…"
-                  : statusAction === "start"
-                    ? "Start agent"
-                    : statusAction === "restart"
-                      ? "Restart agent"
-                      : statusAction === "resume"
-                        ? "Resume agent"
-                        : statusAction === "pause"
-                          ? "Pause agent"
-                          : `Unavailable · ${selected.status}`}
-              </button>
-            </div>
+            <AgentStatusControls
+              key={`${selected.id}:${selected.status}`}
+              agent={selected}
+              busy={isUpdating}
+              updatingStatus={isUpdating ? updatingStatus : null}
+              onUpdate={(status) => void updateAgentStatus(selected, status)}
+            />
           </Panel>
         ) : (
           <Panel title="Agent detail" subtitle="No agent selected">
@@ -850,6 +944,211 @@ export function AgentsPage() {
   );
 }
 
+function AgentStatusControls({
+  agent,
+  busy,
+  updatingStatus,
+  onUpdate,
+}: {
+  agent: Agent;
+  busy: boolean;
+  updatingStatus: AgentStatus | null;
+  onUpdate: (status: AgentStatus) => void;
+}) {
+  const [confirmTermination, setConfirmTermination] = useState(false);
+  const actionsByStatus: Record<AgentStatus, {
+    status: AgentStatus;
+    label: string;
+    icon: typeof Play;
+    className: string;
+  }[]> = {
+    IDLE: [
+      {
+        status: "RUNNING",
+        label: "Start agent",
+        icon: Play,
+        className:
+          "border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:border-emerald-400/50 hover:bg-emerald-500/15",
+      },
+    ],
+    RUNNING: [
+      {
+        status: "PAUSED",
+        label: "Pause agent",
+        icon: Pause,
+        className:
+          "border-amber-500/30 bg-amber-500/10 text-amber-200 hover:border-amber-400/50 hover:bg-amber-500/15",
+      },
+      {
+        status: "IDLE",
+        label: "Set idle",
+        icon: Clock3,
+        className:
+          "border-slate-700 bg-slate-800/70 text-slate-200 hover:border-slate-500 hover:bg-slate-800",
+      },
+    ],
+    PAUSED: [
+      {
+        status: "RUNNING",
+        label: "Resume agent",
+        icon: Play,
+        className:
+          "border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:border-emerald-400/50 hover:bg-emerald-500/15",
+      },
+      {
+        status: "IDLE",
+        label: "Set idle",
+        icon: Clock3,
+        className:
+          "border-slate-700 bg-slate-800/70 text-slate-200 hover:border-slate-500 hover:bg-slate-800",
+      },
+    ],
+    ERROR: [
+      {
+        status: "RUNNING",
+        label: "Retry agent",
+        icon: Play,
+        className:
+          "border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:border-emerald-400/50 hover:bg-emerald-500/15",
+      },
+      {
+        status: "IDLE",
+        label: "Reset to idle",
+        icon: CircleAlert,
+        className:
+          "border-slate-700 bg-slate-800/70 text-slate-200 hover:border-slate-500 hover:bg-slate-800",
+      },
+    ],
+    TERMINATED: [
+      {
+        status: "IDLE",
+        label: "Reactivate agent",
+        icon: Play,
+        className:
+          "border-blue-500/30 bg-blue-500/10 text-blue-200 hover:border-blue-400/50 hover:bg-blue-500/15",
+      },
+    ],
+  };
+  const statusActions = actionsByStatus[agent.status];
+
+  return (
+    <div className="mt-5 space-y-4 border-t border-slate-800 pt-4">
+      <div>
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold text-slate-200">
+            Agent controls
+          </h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Available actions for the current status.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {statusActions.map(
+            ({ status, label, icon: Icon, className }) => {
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onUpdate(status)}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-55 ${className}`}
+                >
+                  {updatingStatus === status ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Icon className="h-3.5 w-3.5" />
+                  )}
+                  {label}
+                </button>
+              );
+            },
+          )}
+        </div>
+      </div>
+
+      {agent.status !== "TERMINATED" && (
+        <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-rose-200">
+                Destructive control-plane action
+              </p>
+              <p className="mt-1 text-[11px] leading-5 text-slate-400">
+                Termination changes the recorded status; it does not directly
+                stop an external runtime.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setConfirmTermination(true)}
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-semibold text-rose-200 transition-colors hover:border-rose-400/50 hover:bg-rose-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <X className="h-3.5 w-3.5" />
+              Terminate agent
+            </button>
+          </div>
+        </div>
+      )}
+      <p className="text-xs leading-5 text-slate-500">
+        Status changes are applied immediately. The agent runtime must observe
+        and enforce the updated status for it to affect a running process.
+      </p>
+
+      {confirmTermination && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="terminate-agent-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        >
+          <div className="w-full max-w-md rounded-xl border border-rose-500/30 bg-slate-900 p-5 shadow-2xl">
+            <h2
+              id="terminate-agent-title"
+              className="text-lg font-semibold text-white"
+            >
+              Terminate {agent.name}?
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              This changes the agent&apos;s control-plane status to TERMINATED.
+              It cannot be restarted from this screen unless you set another
+              status.
+            </p>
+            <p className="mt-2 text-xs leading-5 text-amber-200">
+              The status endpoint does not directly terminate an external
+              running process.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirmTermination(false)}
+                className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setConfirmTermination(false);
+                  onUpdate("TERMINATED");
+                }}
+                className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-500 disabled:opacity-50"
+              >
+                {updatingStatus === "TERMINATED" && (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                )}
+                Confirm termination
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg border border-slate-800/80 bg-slate-950/40 px-3 py-2.5">
@@ -864,30 +1163,167 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 export function PolicyPage() {
+  const [policyConfiguration, setPolicyConfiguration] =
+    useState<PolicyConfiguration | null>(null);
+  const [policyLoading, setPolicyLoading] = useState(true);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const [policyRevision, setPolicyRevision] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    GovernanceAPI.getPolicies()
+      .then((configuration) => {
+        if (!controller.signal.aborted) {
+          setPolicyConfiguration(configuration);
+          setPolicyLoading(false);
+        }
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setPolicyError(
+          error instanceof Error ? error.message : "Unable to load backend policies.",
+        );
+        setPolicyLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [policyRevision]);
+
+  const refreshPolicies = () => {
+    setPolicyLoading(true);
+    setPolicyError(null);
+    setPolicyRevision((revision) => revision + 1);
+  };
+
   return (
     <div className="mx-auto max-w-[1200px] space-y-6">
       <PageHeading
         eyebrow="Governance controls"
         title="Policy manager"
-        description="The control plane loads policy definitions from YAML during startup. This backend does not expose policy read or update endpoints."
-      />
-      <Panel
-        title="Policy configuration"
-        subtitle="Backend-managed policy files"
+        description="View the active policy mode and rules currently loaded by the control-plane backend."
       >
-        <p className="text-sm leading-6 text-slate-300">
-          Policy definitions are stored under{" "}
-          <code className="text-blue-200">policy/definitions/</code> and loaded
-          by the backend policy engine at startup. No policy API is currently
-          registered, so this page cannot safely read or submit policy edits.
-        </p>
-        <p className="mt-3 text-xs text-slate-500">
-          Available policy-related API: policy evaluation occurs when an agent
-          submits a proposal via POST /proposals/. There is no GET or update
-          policy endpoint.
-        </p>
-      </Panel>
+        <button
+          type="button"
+          onClick={refreshPolicies}
+          disabled={policyLoading}
+          className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${policyLoading ? "animate-spin" : ""}`} />
+          Refresh policies
+        </button>
+      </PageHeading>
+
+      {policyLoading ? (
+        <Panel title="Loading backend policies">
+          <div role="status" className="flex items-center gap-3 text-sm text-slate-400">
+            <Loader2 className="h-4 w-4 animate-spin text-blue-300" />
+            Fetching policy configuration from the control plane…
+          </div>
+        </Panel>
+      ) : policyError ? (
+        <Panel title="Could not load backend policies">
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm leading-6 text-rose-200">{policyError}</p>
+            <button
+              type="button"
+              onClick={refreshPolicies}
+              className="rounded-lg border border-rose-400/30 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/10"
+            >
+              Retry
+            </button>
+          </div>
+        </Panel>
+      ) : policyConfiguration ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Panel title="Policy mode" subtitle="Current control-plane enforcement mode">
+              <p className="text-2xl font-semibold capitalize text-emerald-200">
+                {policyConfiguration.mode.replaceAll("_", " ")}
+              </p>
+            </Panel>
+            <Panel title="Loaded rules" subtitle="Rules currently available to the policy engine">
+              <p className="text-2xl font-semibold tabular-nums text-slate-100">
+                {policyConfiguration.rule_count}
+              </p>
+            </Panel>
+          </div>
+
+          <Panel
+            title="Loaded policy rules"
+            subtitle="Read-only view of rules currently loaded in backend memory"
+          >
+            {policyConfiguration.rules.length > 0 ? (
+              <div className="space-y-4">
+                {policyConfiguration.rules.map((rule) => (
+                  <PolicyRuleCard key={`${rule.source_file}:${rule.id}`} rule={rule} />
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-lg border border-dashed border-slate-700 px-4 py-8 text-center text-sm text-slate-400">
+                The backend currently has no policy rules loaded.
+              </p>
+            )}
+          </Panel>
+        </>
+      ) : null}
     </div>
+  );
+}
+
+function PolicyRuleCard({ rule }: { rule: PolicyRule }) {
+  return (
+    <article className="rounded-xl border border-slate-800 bg-slate-950/40">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 px-4 py-3">
+        <div className="min-w-0">
+          <h3 className="break-words font-mono text-sm font-semibold text-blue-200">
+            {rule.id}
+          </h3>
+          <p className="mt-1 break-words text-xs text-slate-400">
+            Applies to <span className="font-mono text-slate-300">{rule.action}</span>
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-[10px]">
+          <span className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-slate-300">
+            {rule.source_file}
+          </span>
+          {rule.tier && (
+            <span className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2.5 py-1 text-violet-200">
+              {rule.tier}
+            </span>
+          )}
+        </div>
+      </header>
+      <div className="grid gap-4 p-4 lg:grid-cols-2">
+        <PolicyDataBlock title="Conditions" value={rule.conditions} />
+        <PolicyDataBlock title="Enforcement" value={rule.enforcement} />
+      </div>
+    </article>
+  );
+}
+
+function PolicyDataBlock({
+  title,
+  value,
+}: {
+  title: string;
+  value: Record<string, unknown>;
+}) {
+  return (
+    <section className="min-w-0">
+      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+        {title}
+      </h4>
+      {Object.keys(value).length > 0 ? (
+        <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs leading-5 text-slate-300">
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      ) : (
+        <p className="rounded-lg border border-dashed border-slate-800 px-3 py-2.5 text-xs text-slate-500">
+          None configured
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -933,7 +1369,7 @@ export function KillSwitchPage() {
       />
       <EndpointUnavailablePanel
         endpoint="No /killswitch/status or /killswitch route"
-        explanation="For an individual agent only, the available endpoint is PATCH /agents/{agent_id}/status?status=PAUSED. Use the Agents page for that supported control. Pod, capability, and global stops are not exposed."
+        explanation="The Agents page can update an individual agent to PAUSED or TERMINATED using PATCH /agents/{agent_id}/status. This changes the control-plane status; it does not directly stop an external runtime process. Pod, capability, and global stop controls are not exposed."
       />
     </div>
   );
@@ -1011,7 +1447,7 @@ function RegisterAgentModal({
       setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
   const valid =
-    form.agent_id.trim().length > 0 &&
+    form.agent_id.trim().length === 32 &&
     form.name.trim().length > 0 &&
     form.version.trim().length > 0 &&
     form.owner.trim().length > 0 &&
@@ -1023,7 +1459,7 @@ function RegisterAgentModal({
     try {
       await api("/agents", {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, agent_id: form.agent_id.trim() }),
       });
       toast.success(`${form.name} registered`, "Agent registration");
       onRegistered();
@@ -1072,11 +1508,37 @@ function RegisterAgentModal({
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <Field label="Agent ID" required>
             <input
+              id="register-agent-id"
               value={form.agent_id}
-              onChange={update("agent_id")}
-              placeholder="field-cleanup-agent"
+              maxLength={64}
+              onChange={(event) => {
+                const value = event.target.value;
+                const trimmed = value.trim();
+                const leadingWhitespace = value.match(/^\s*/)?.[0] ?? "";
+                const trailingWhitespace = trimmed
+                  ? value.slice(value.trimEnd().length)
+                  : "";
+                const cappedId = trimmed.slice(0, 32);
+                setForm((prev) => ({
+                  ...prev,
+                  agent_id: `${leadingWhitespace}${cappedId}${trailingWhitespace}`,
+                }));
+              }}
+              aria-describedby="register-agent-id-count"
+              placeholder="Enter a 32-character ID"
               className={inputClass}
             />
+            <span
+              id="register-agent-id-count"
+              className={`mt-1 block text-xs ${
+                form.agent_id.trim().length === 32
+                  ? "text-emerald-400"
+                  : "text-slate-500"
+              }`}
+              aria-live="polite"
+            >
+              {form.agent_id.trim().length}/32 characters
+            </span>
           </Field>
           <Field label="Name" required>
             <input

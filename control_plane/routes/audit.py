@@ -1,7 +1,7 @@
 """
 CDM-OS — API Routes: Audit Log
 
-Read-only endpoints for browsing the immutable audit trail.
+Endpoints for recording and browsing the immutable audit trail.
 Used by the Governance UI compliance view.
 """
 

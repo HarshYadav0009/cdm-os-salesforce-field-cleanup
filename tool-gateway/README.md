@@ -59,6 +59,25 @@ Agent → MCP Client → Datadog MCP Server → Datadog API
 
 Each server is a standalone service that can be developed and deployed independently.
 
+## Salesforce Custom-Field Deprecation
+
+The Tier-2 `salesforce_deprecate_field` operation backs up a custom field's
+metadata and tags its description as deprecated. It leaves field-level security
+and existing records unchanged. A failed update attempts to restore the
+original description from the backup.
+
+## Salesforce Custom-Field Deletion
+
+`salesforce_delete_field` is a Tier-3 operation. It can be proposed only with
+`confirm_delete: true`, and the Control Plane requires human approval before
+dispatching it to `POST /tools/salesforce/delete`. The gateway accepts only
+unmanaged custom fields and writes a metadata backup before calling Salesforce
+Metadata API `CustomField.delete`.
+
+The metadata backup is an audit snapshot, not a restore mechanism; deletion can
+remove the field's data and cannot be reversed by this tool. Do not call the
+gateway endpoint directly to bypass the Control Plane approval workflow.
+
 ## Key Design Decisions
 
 - Tool calls are **never** made directly by the agent — always through the gateway

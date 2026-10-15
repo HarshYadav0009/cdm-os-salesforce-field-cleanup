@@ -1,0 +1,26 @@
+{
+  "backup_id": "bak_Case_POC_test__c_234ed4089c18",
+  "created_at": "2026-10-09T06:50:06.405169+00:00",
+  "object_name": "Case",
+  "field_name": "POC_test__c",
+  "metadata": {
+    "name": "POC_test__c",
+    "label": "POC test",
+    "type": "string",
+    "length": 10,
+    "precision": 0,
+    "scale": 0,
+    "nillable": true,
+    "createable": true,
+    "updateable": true,
+    "calculated": false,
+    "custom": true,
+    "description": ""
+  },
+  "description": "",
+  "fls_settings": {
+    "readable": true,
+    "editable": true
+  },
+  "checksum": "1082073bcea6055d123bada2d1a2771b77eea3fa1791498d18ea46802e90e209"
+}

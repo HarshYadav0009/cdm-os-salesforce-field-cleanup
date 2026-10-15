@@ -15,7 +15,7 @@ class SalesforceFieldDeprecationService:
     Field Deprecation Service with Pre-Modification Backup and Automatic Error Rollback.
     Tier-2 Controlled Remediation Operation.
     - Tags custom field description with [DEPRECATED]
-    - Restricts Field-Level Security (FLS)
+    - Leaves Field-Level Security unchanged
     - If failure occurs, automatically rolls back to original state
     """
 
@@ -87,18 +87,6 @@ class SalesforceFieldDeprecationService:
                     f"Failed to update description for {object_name}.{field_name} in Salesforce."
                 )
 
-            # 4. Remove/restrict FLS access
-            fls_success = self.client.update_field_permissions(
-                object_name,
-                field_name,
-                readable=False,
-                editable=False
-            )
-            if not fls_success:
-                raise RuntimeError(
-                    f"Failed to restrict FLS permissions for {object_name}.{field_name}."
-                )
-
             logger.info(
                 f"Field {object_name}.{field_name} successfully deprecated. Backup ID: {backup_id}"
             )
@@ -110,7 +98,8 @@ class SalesforceFieldDeprecationService:
                 "backup_id": backup_id,
                 "previous_description": original_desc,
                 "new_description": new_desc,
-                "fls_restricted": True,
+                "fls_restricted": False,
+                "warning": "Field-level security was left unchanged.",
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
 
@@ -121,13 +110,18 @@ class SalesforceFieldDeprecationService:
                 f"Initiating automatic rollback from backup {backup_id}..."
             )
             try:
-                self.backup_service.rollback_field(backup_id)
+                rollback_result = self.backup_service.rollback_field(backup_id)
+                if not rollback_result.get("description_restored"):
+                    raise RuntimeError("The original field description was not restored.")
                 logger.info(f"Automatic rollback for {object_name}.{field_name} succeeded.")
             except Exception as rollback_err:
                 logger.critical(
                     f"Automatic rollback failed for {object_name}.{field_name}: {rollback_err}"
                 )
+                raise RuntimeError(
+                    f"Deprecation failed: {exc}. Automatic rollback also failed: {rollback_err}"
+                ) from exc
 
             raise RuntimeError(
-                f"Deprecation failed: {exc}. Automatic rollback executed successfully."
+                f"Deprecation failed: {exc}. Original description restored from backup {backup_id}."
             ) from exc

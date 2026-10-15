@@ -126,7 +126,7 @@ INSERT INTO tool_definitions (tool_id, name, description, tier, mcp_server) VALU
     ('salesforce_describe_object',    'Describe SObject',            'Get field-level metadata for a specific SObject',                  'Tier-1', 'salesforce-mcp'),
     ('salesforce_query_field_usage',  'Query Field Usage',           'Run SOQL to compute field population % over a time window',        'Tier-1', 'salesforce-mcp'),
     ('salesforce_scan_apex_references','Scan Apex References',       'Search Apex classes, triggers, flows for field API name references','Tier-1', 'salesforce-mcp'),
-    ('salesforce_deprecate_field',    'Deprecate Field',             'Mark field as deprecated (update description + remove FLS)',        'Tier-2', 'salesforce-mcp'),
+    ('salesforce_deprecate_field',    'Deprecate Field',             'Back up and mark a custom field description as deprecated; leaves field access unchanged', 'Tier-2', 'salesforce-mcp'),
     ('salesforce_backup_field_def',   'Backup Field Definition',     'Export field metadata XML before modification',                    'Tier-2', 'salesforce-mcp'),
     ('salesforce_delete_field',       'Delete Custom Field',         'Permanently delete a custom field from the org',                   'Tier-3', 'salesforce-mcp')
 ON CONFLICT (tool_id) DO NOTHING;

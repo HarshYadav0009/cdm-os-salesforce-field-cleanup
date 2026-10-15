@@ -9,8 +9,14 @@ import type { NavId } from "./navigation";            // ← type only
 
 export default function MainPage() {
   const [activePage, setActivePage] = useState<NavId>(DEFAULT_NAV_ID);
+  const [dependencyViewerVisited, setDependencyViewerVisited] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  const navigateTo = (page: NavId) => {
+    setActivePage(page);
+    if (page === "DependencyViewer") setDependencyViewerVisited(true);
+  };
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("cdm-os-theme");
@@ -30,23 +36,27 @@ export default function MainPage() {
   return (
     <div className="flex h-dvh flex-col bg-[#111319] text-slate-100">
       <Head
-        onOpenNav={() => setMobileNavOpen(true)}
+        navOpen={mobileNavOpen}
+        onToggleNav={() => setMobileNavOpen((open) => !open)}
         notificationCount={3}
         userName="Sumit"
-        onBellClick={() => setActivePage("ApprovalQueue")}
+        onBellClick={() => navigateTo("ApprovalQueue")}
       />
 
       <div className="flex min-h-0 flex-1">
         <LeftSideBar
           activePage={activePage}
-          onNavigate={setActivePage}
+          onNavigate={navigateTo}
           mobileOpen={mobileNavOpen}
           onCloseMobile={() => setMobileNavOpen(false)}
           theme={theme}
           onToggleTheme={toggleTheme}
         />
 
-        <RightSideSection activePage={activePage} />
+        <RightSideSection
+          activePage={activePage}
+          dependencyViewerVisited={dependencyViewerVisited}
+        />
       </div>
     </div>
   );

@@ -60,6 +60,7 @@ class Settings(BaseSettings):
 
     # ── MCP Tool Gateway ──────────────────────────────────────
     MCP_GATEWAY_PORT: int = 8080
+    MCP_GATEWAY_URL: str = "http://127.0.0.1:8080"
     MCP_REQUEST_TIMEOUT_SEC: int = 30
 
     # ── Audit ─────────────────────────────────────────────────

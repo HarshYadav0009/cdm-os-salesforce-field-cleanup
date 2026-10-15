@@ -11,6 +11,7 @@ import {
   Activity,
   Settings,
   ClipboardList,
+  Search,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -18,6 +19,7 @@ import ApprovalQueuePage from "../ApprovalQueue/ApprovalQueuePage";
 import ProposalsPage from "../Proposals/ProposalsPage";
 import AuditLogPage from "../AuditLog/AuditLogPage";
 import SettingsPage from "../Settings/SettingsPage";
+import DependencyViewerPage from "../DependencyViewer/DependencyViewerPage";
 import {
   AgentsPage,
   BoardroomPage,
@@ -33,6 +35,7 @@ export const NAV_IDS = [
   "Agents",
   "ApprovalQueue",
   "Proposals",
+  "DependencyViewer",
   "AuditLog",
   "PolicyManager",
   "DigitalBoardroom",
@@ -56,6 +59,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "Agents",           label: "Agents",             icon: Bot,               Component: AgentsPage },
   { id: "ApprovalQueue",    label: "Approval Queue",     icon: Users,             Component: ApprovalQueuePage },
   { id: "Proposals",        label: "Proposals",          icon: ClipboardList,     Component: ProposalsPage },
+  { id: "DependencyViewer", label: "Dependency Viewer", icon: Search,             Component: DependencyViewerPage },
   { id: "AuditLog",         label: "Audit Trail",         icon: FileText,          Component: AuditLogPage },
   { id: "PolicyManager",    label: "Policy Manager",     icon: ShieldCheck,       Component: PolicyPage },
   { id: "DigitalBoardroom", label: "Digital Boardroom",  icon: Scale,             Component: BoardroomPage },
