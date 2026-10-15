@@ -45,6 +45,12 @@ class SalesforceFieldDeprecationService:
         object_name = validate_salesforce_identifier(object_name)
         field_name = validate_salesforce_identifier(field_name)
 
+        if not field_name.endswith("__c"):
+            raise ValueError(
+                "Deprecation requires a custom field ending in __c. "
+                "Person Account __pc fields must be reviewed on their underlying Contact field."
+            )
+
         # 1. Fetch current field metadata
         field_info = self.metadata_service.get_field_metadata(object_name, field_name)
         field_meta = field_info["field"]

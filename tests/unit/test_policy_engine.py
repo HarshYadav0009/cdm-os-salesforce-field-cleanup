@@ -89,3 +89,40 @@ def test_valid_custom_field_deletion(policy_engine):
     assert decision.requires_human_approval is True
     assert len(decision.denial_reasons) == 0
 
+
+@pytest.mark.parametrize("payload", [
+    {"field_name": "Legacy_Rating__c"},
+    {"field_api_name": " Legacy_Rating__c "},
+    {"field_name": "Legacy_Rating__c", "field_api_name": "Legacy_Rating__c"},
+    {"field_name": "Legacy_Rating__c", "field_api_name": ""},
+])
+def test_deletion_identifier_aliases(policy_engine, payload):
+    decision = policy_engine.evaluate("salesforce_delete_field", ToolTier.TIER_3, payload)
+    assert decision.allowed is True
+    assert decision.requires_human_approval is True
+
+
+@pytest.mark.parametrize("payload", [
+    {"field_name": "Name", "field_api_name": "Legacy_Rating__c"},
+    {"field_name": "Legacy_Rating__c", "field_api_name": "Name"},
+    {"field_name": "pkg__Field__c", "field_api_name": "Legacy_Rating__c"},
+])
+def test_conflicting_deletion_identifiers_are_denied(policy_engine, payload):
+    decision = policy_engine.evaluate("salesforce_delete_field", ToolTier.TIER_3, payload)
+    assert decision.allowed is False
+    assert any("Conflicting" in reason for reason in decision.denial_reasons)
+
+
+@pytest.mark.parametrize("field_name", ["Name", "pkg__Field__c", "pkg__custom__c", "Field__pc", ""])
+def test_field_name_alias_preserves_protection(policy_engine, field_name):
+    decision = policy_engine.evaluate(
+        "salesforce_delete_field", ToolTier.TIER_3, {"field_name": field_name}
+    )
+    assert decision.allowed is False
+
+
+@pytest.mark.parametrize("payload", [{}, {"field_name": None}, {"field_api_name": 123}])
+def test_missing_or_invalid_identifier_is_denied(policy_engine, payload):
+    decision = policy_engine.evaluate("salesforce_delete_field", ToolTier.TIER_3, payload)
+    assert decision.allowed is False
+

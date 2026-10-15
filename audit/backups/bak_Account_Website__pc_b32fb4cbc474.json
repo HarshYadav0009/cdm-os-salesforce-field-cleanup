@@ -1,0 +1,24 @@
+{
+  "backup_id": "bak_Account_Website__pc_b32fb4cbc474",
+  "created_at": "2026-10-13T06:42:35.764946+00:00",
+  "object_name": "Account",
+  "field_name": "Website__pc",
+  "metadata": {
+    "name": "Website__pc",
+    "label": "Website",
+    "type": "url",
+    "length": 255,
+    "precision": 0,
+    "scale": 0,
+    "nillable": true,
+    "createable": true,
+    "updateable": true,
+    "calculated": false,
+    "custom": true,
+    "filterable": true,
+    "encrypted": false,
+    "description": ""
+  },
+  "description": "",
+  "checksum": "2eea63b5cd80bcc9b4b334dc49cbfeae8a6d990ab5f158fa5a45ba9c258559db"
+}

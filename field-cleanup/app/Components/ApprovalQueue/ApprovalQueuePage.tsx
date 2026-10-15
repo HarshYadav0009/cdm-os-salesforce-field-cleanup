@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import ExecutionFollowup from "./ExecutionFollowup";
 import QueueTable, { type QueueRow } from "./QueueTable";
 import RiskAssessmentModal from "./RiskAssessmentModal";
 import { useToast } from "../Toast/useToast";
 import { useApiResource } from "@/app/lib/api/useApiResource";
 import { GovernanceAPI } from "@/app/lib/api/governance";
 import { SourceNotice } from "@/app/Components/Governance/GovernancePages";
+import { usePolling } from "@/app/lib/api/usePolling";
 import { useRealtime } from "@/app/lib/ws/RealtimeProvider";
 import type { Proposal } from "@/types/governance";
 
@@ -67,10 +69,12 @@ function toQueueRow(proposal: Proposal): QueueRow {
 export default function ApprovalQueuePage() {
   const source = useApiResource<Proposal[]>("/proposals/queue/pending", []);
   const { reload } = source;
+  usePolling(reload);
   const { subscribe } = useRealtime();
   const rows = source.data.map(toQueueRow);
   const [selectedRow, setSelectedRow] = useState<QueueRow | null>(null);
   const [initialDecision, setInitialDecision] = useState<"approve" | "reject" | undefined>();
+  const [executionId, setExecutionId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [tierFilter, setTierFilter] = useState("all");
   const toast = useToast();
@@ -123,6 +127,7 @@ export default function ApprovalQueuePage() {
       source.setData((prev) => prev.filter((proposal) => proposal.id !== row.id));
       setSelectedRow(null);
       if (decision === "approve") {
+        setExecutionId(row.id);
         try {
           await GovernanceAPI.executeProposal(row.id);
           if (row.proposal.tool_id === "salesforce_delete_field") {
@@ -236,6 +241,7 @@ export default function ApprovalQueuePage() {
         </div>
       </header>
 
+      {executionId && <ExecutionFollowup key={executionId} id={executionId} onDismiss={() => setExecutionId(null)} />}
       <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
         <div className="flex flex-col gap-4 border-b border-slate-800 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>

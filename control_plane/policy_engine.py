@@ -147,6 +147,20 @@ class PolicyEngine:
         """
         decision = PolicyDecision(allowed=True)
 
+        # Deletion execution accepts either name. Never approve one identifier
+        # while the gateway executes a different one.
+        if tool_id == "salesforce_delete_field":
+            identifiers = [
+                input_payload[key].strip()
+                for key in ("field_name", "field_api_name")
+                if isinstance(input_payload.get(key), str) and input_payload[key].strip()
+            ]
+            if len(set(identifiers)) > 1:
+                decision.allowed = False
+                decision.denial_reasons.append(
+                    "Conflicting field_name and field_api_name; both must identify the same field."
+                )
+
         # ── Tier-1 tools are always allowed ───────────────────
         if tier == ToolTier.TIER_1:
             decision.matched_rules.append("implicit_tier1_allow")
@@ -241,7 +255,11 @@ class PolicyEngine:
         """
         import re
 
-        field_name = payload.get("field_api_name", "")
+        field_name = next(
+            (payload[key].strip() for key in ("field_name", "field_api_name")
+             if isinstance(payload.get(key), str) and payload[key].strip()),
+            "",
+        )
 
         if "is_custom_field" in condition:
             if condition["is_custom_field"] is False and field_name.endswith("__c"):
@@ -251,7 +269,7 @@ class PolicyEngine:
 
         if "is_managed_package" in condition:
             # Managed package fields have namespace__FieldName__c pattern
-            if condition["is_managed_package"] is True and "__" in field_name.split("__c")[0]:
+            if condition["is_managed_package"] is True and "__" in field_name.removesuffix("__c"):
                 return True
 
         if "field_name_matches" in condition:

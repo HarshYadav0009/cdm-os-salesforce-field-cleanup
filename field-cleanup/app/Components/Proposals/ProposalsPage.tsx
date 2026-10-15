@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ExecutionPanel from "./ExecutionPanel";
 import { X } from "lucide-react";
 import { useApiResource } from "@/app/lib/api/useApiResource";
+import { usePolling } from "@/app/lib/api/usePolling";
 import { useRealtime } from "@/app/lib/ws/RealtimeProvider";
 import type { Proposal } from "@/types/governance";
 
@@ -44,8 +46,11 @@ function TierBadge({ tier }: { tier: Proposal["tier"] }) {
 }
 
 export default function ProposalsPage() {
-  const source = useApiResource<Proposal[]>("/proposals/", []);
+  const [page, setPage] = useState(0);
+  const [status, setStatus] = useState("");
+  const source = useApiResource<Proposal[]>(`/proposals/?limit=20&offset=${page * 20}${status ? `&status=${status}` : ""}`, []);
   const { reload } = source;
+  usePolling(reload);
   const { subscribe } = useRealtime();
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const selectedProposal = source.data.find(({ id }) => id === selectedProposalId);
@@ -73,11 +78,29 @@ export default function ProposalsPage() {
       <header>
         <h1 className="text-xl font-bold sm:text-2xl">Proposals</h1>
         <p className="mt-1 text-sm text-slate-400">
-          All proposals returned by <code>GET /proposals/</code>, including policy-approved,
-          denied, and human-review items.
+          Review proposals, decisions, execution results, and activity. Updates refresh every 10 seconds.
         </p>
       </header>
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <label className="flex flex-col gap-1 text-xs text-slate-400">Proposal status
+          <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); setSelectedProposalId(null); }} className="min-h-11 rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-white">
+            <option value="">All statuses</option>
+            {["PENDING_HUMAN_APPROVAL", "POLICY_APPROVED", "HUMAN_APPROVED", "EXECUTING", "COMPLETED", "FAILED", "POLICY_DENIED", "HUMAN_REJECTED"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}
+          </select>
+        </label>
+        <button type="button" onClick={reload} disabled={source.loading} className="min-h-11 rounded-lg border border-slate-700 px-4 text-sm text-slate-200 disabled:opacity-50">Refresh proposals</button>
+      </div>
+      <div className="space-y-3 md:hidden">
+        {source.data.map((proposal) => <article key={proposal.id} className="min-w-0 space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-4">
+          <div className="flex flex-wrap gap-2"><StatusBadge status={proposal.status} /><TierBadge tier={proposal.tier} /></div>
+          <p className="break-words text-sm font-semibold">{proposal.tool_id}</p>
+          <p className="break-all font-mono text-xs text-slate-400">{proposal.id}</p>
+          <p className="break-words text-xs text-slate-400">{proposal.agent_id} · {formatDate(proposal.created_at)}</p>
+          {proposal.error_message && <p className="line-clamp-2 break-words text-xs text-rose-300">{proposal.error_message}</p>}
+          <button type="button" onClick={() => setSelectedProposalId(proposal.id)} aria-haspopup="dialog" className="min-h-11 w-full rounded-lg border border-blue-400/30 text-sm text-blue-300">View details and progress</button>
+        </article>)}
+      </div>
       <div className="overflow-hidden rounded-lg border border-slate-700 bg-slate-900">
         {source.loading && source.data.length === 0 ? (
           <p role="status" className="px-4 py-10 text-center text-sm text-slate-400">
@@ -88,7 +111,7 @@ export default function ProposalsPage() {
             No proposals were returned by the API.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="bg-slate-800 text-xs uppercase text-slate-300">
                 <tr>
@@ -131,6 +154,13 @@ export default function ProposalsPage() {
 
       </div>
 
+      <nav aria-label="Proposal pagination" className="flex flex-wrap items-center justify-between gap-3">
+        <p aria-live="polite" className="text-xs text-slate-400">Page {page + 1} · {source.data.length} proposals</p>
+        <div className="flex gap-2">
+          <button type="button" disabled={page === 0 || source.loading} onClick={() => { setPage((value) => value - 1); setSelectedProposalId(null); }} className="min-h-11 rounded-lg border border-slate-700 px-4 text-sm disabled:opacity-40">Previous</button>
+          <button type="button" disabled={source.data.length < 20 || source.loading || !!source.error} onClick={() => { setPage((value) => value + 1); setSelectedProposalId(null); }} className="min-h-11 rounded-lg border border-slate-700 px-4 text-sm disabled:opacity-40">Next</button>
+        </div>
+      </nav>
       {selectedProposal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
@@ -172,6 +202,7 @@ export default function ProposalsPage() {
                 <span aria-hidden="true">·</span>
                 <span>{selectedProposal.tier}</span>
               </div>
+              <ExecutionPanel key={selectedProposal.id} proposal={selectedProposal} reload={reload} />
               <section
                 aria-labelledby="proposal-policy-title"
                 className={`rounded-lg border p-4 ${

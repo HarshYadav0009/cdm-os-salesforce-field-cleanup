@@ -152,8 +152,10 @@ export default function RemediationProposals({
             const deletion = action.id === "salesforce_delete_field";
             const unavailable =
               !tool ||
-              (!custom && action.id !== "salesforce_backup_field_def") ||
-              (deletion && field.slice(0, -3).includes("__"));
+              ((!custom || !field.endsWith("__c")) &&
+                action.id !== "salesforce_backup_field_def") ||
+              (deletion &&
+                (!field.endsWith("__c") || field.slice(0, -3).includes("__")));
             const disabled =
               unavailable ||
               loading ||

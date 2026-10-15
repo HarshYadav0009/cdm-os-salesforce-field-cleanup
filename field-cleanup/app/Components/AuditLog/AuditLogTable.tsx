@@ -234,16 +234,16 @@ function HmacBadge({
   status,
   signature,
 }: {
-  status: "Present" | "Missing";
+  status: AuditLog["hmacStatus"];
   signature?: string;
 }) {
-  const present = status === "Present";
+  const present = status === "Present" || status === "Verified";
   return (
     <span
       title={signature ?? "The backend returned no HMAC signature"}
       className={[
         "inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-1 text-[10px] font-medium leading-tight text-white",
-        present ? "bg-[#429861]" : "bg-[#b54848]",
+        status === "Verified" ? "bg-[#429861]" : status === "Present" ? "bg-slate-600" : "bg-[#b54848]",
       ].join(" ")}
     >
       {present ? (
@@ -252,7 +252,7 @@ function HmacBadge({
         <AlertTriangle className="h-3 w-3 shrink-0" />
       )}
       <span className="min-w-0 break-words [overflow-wrap:anywhere]">
-        {present ? `Signature present · ${signature?.slice(0, 16)}…` : "Signature missing"}
+        {status === "Verified" ? "Payload verified" : status === "Present" ? "Not verified · signature present" : status === "Invalid" ? "Invalid signature" : status === "Not found" ? "Record not found" : "Signature missing"}
       </span>
     </span>
   );

@@ -23,7 +23,7 @@ export default function MainPage() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationSoundEnabled, setNotificationSoundEnabled] =
-    useState(false);
+    useState(true);
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>(
     () => {
       if (typeof window === "undefined") return [];
@@ -51,6 +51,32 @@ export default function MainPage() {
   );
   const { reload: reloadApprovals } = approvalsSource;
   const { subscribe } = useRealtime();
+
+  useEffect(() => {
+    if (!notificationSoundEnabled) return;
+
+    // Browsers require a user gesture before notification audio can play.
+    const enableAudio = () => {
+      const AudioContextConstructor =
+        window.AudioContext ??
+        (window as Window & { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!AudioContextConstructor) return;
+      const context = audioContextRef.current ?? new AudioContextConstructor();
+      audioContextRef.current = context;
+      if (context.state !== "running") {
+        void context.resume().catch((error) => {
+          console.error("Unable to enable notification audio.", error);
+        });
+      }
+    };
+    document.addEventListener("pointerdown", enableAudio);
+    document.addEventListener("keydown", enableAudio);
+    return () => {
+      document.removeEventListener("pointerdown", enableAudio);
+      document.removeEventListener("keydown", enableAudio);
+    };
+  }, [notificationSoundEnabled]);
 
   useEffect(() => {
     const poll = window.setInterval(() => {

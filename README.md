@@ -350,3 +350,22 @@ The **Apex Reference Scanner** (`tool-gateway/servers/salesforce/apex_references
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines, coding standards, and PR process.
 
+
+
+## Next.js Governance UI
+
+The active dashboard is in `field-cleanup/` (Next.js), replacing the planned Vite UI in `frontend/`.
+
+```sh
+cd field-cleanup
+npm install
+npm run dev
+```
+
+Open http://localhost:3000 with the local control plane on port 8000 and tool gateway on port 8080.
+
+- **Approval Queue:** live field metadata, population and dependency evidence, reviewer decisions, and execution follow-up.
+- **Proposals:** status filtering, pagination, mobile cards, approved execution controls, results and activity timelines.
+- **Audit Trail:** filtered CSV downloads, printable reports (choose Save as PDF), and server-side payload signature verification.
+
+These views poll for updates while the browser tab is visible; WebSocket delivery still requires backend support. Reports cover filtered events from the latest 500 audit records. Signature verification covers event payloads, not the complete audit record or log ordering. Failed executions require reviewing Salesforce state before creating another proposal.

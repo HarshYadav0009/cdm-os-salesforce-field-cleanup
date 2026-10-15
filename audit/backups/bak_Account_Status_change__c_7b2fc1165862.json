@@ -1,0 +1,24 @@
+{
+  "backup_id": "bak_Account_Status_change__c_7b2fc1165862",
+  "created_at": "2026-10-13T11:41:49.483041+00:00",
+  "object_name": "Account",
+  "field_name": "Status_change__c",
+  "metadata": {
+    "name": "Status_change__c",
+    "label": "Status change",
+    "type": "string",
+    "length": 12,
+    "precision": 0,
+    "scale": 0,
+    "nillable": true,
+    "createable": true,
+    "updateable": true,
+    "calculated": false,
+    "custom": true,
+    "filterable": true,
+    "encrypted": false,
+    "description": ""
+  },
+  "description": "",
+  "checksum": "d1af4f92ddb18ccbc82ca94256bb9e70ec05dc471c5d8aa9e1912d2a5419991b"
+}

@@ -1,0 +1,24 @@
+{
+  "backup_id": "bak_Contact_Lead__c_4344b9ed472d",
+  "created_at": "2026-10-13T12:04:51.474012+00:00",
+  "object_name": "Contact",
+  "field_name": "Lead__c",
+  "metadata": {
+    "name": "Lead__c",
+    "label": "Lead",
+    "type": "reference",
+    "length": 18,
+    "precision": 0,
+    "scale": 0,
+    "nillable": true,
+    "createable": true,
+    "updateable": true,
+    "calculated": false,
+    "custom": true,
+    "filterable": true,
+    "encrypted": false,
+    "description": ""
+  },
+  "description": "",
+  "checksum": "6434fcb7283be85f668cbb44dd299b72294138707fa0e3c355ae22c875437a7f"
+}

@@ -16,7 +16,7 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Platform settings</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
           Review service connectivity and configuration boundaries for this dashboard.
-          The backend currently exposes proposal, agent, tool, and audit APIs. Policy and emergency-stop controls depend on additional backend routes.
+          The backend currently exposes proposal, agent, tool, and audit APIs. Policy rules are available for review. Agent status controls are available in Agents; scoped emergency stops still require backend support.
         </p>
       </header>
 
@@ -73,12 +73,14 @@ export default function SettingsPage() {
               <li>Valid statuses: IDLE, RUNNING, PAUSED, ERROR, TERMINATED</li>
               <li>GET /tools/</li>
               <li>GET /audit/?limit=50</li>
+              <li>POST /audit/verify</li>
+              <li>GET /policies/</li>
             </ul>
           </div>
         </div>
         <p className="border-t border-slate-800 px-5 py-3 text-xs leading-5 text-amber-200">
           Dashboard summary, policy CRUD, boardroom, cost, kill-switch,
-          drift, audit-export, and WebSocket endpoints are not registered.
+          drift, and WebSocket endpoints are not registered. Audit Trail supports signature verification, CSV download, and printable PDF reports.
         </p>
       </section>
 
