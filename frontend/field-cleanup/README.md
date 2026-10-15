@@ -2,6 +2,8 @@
 
 `frontend/field-cleanup/` is the active dashboard. It uses Next.js App Router, React, TypeScript, Tailwind CSS, and Lucide icons. The dashboard provides Salesforce field assessment, governed cleanup proposals, human review, and audit reporting.
 
+The frontend now targets the endpoint contract supplied on 15 October 2026. The Python backend in this checkout still uses a different contract; it must be updated or replaced with a compatible service before live integration can pass. Frontend contract tests use supplied response fixtures rather than treating the current Python routes as authoritative.
+
 ## How the application works
 
 ```text
@@ -50,13 +52,14 @@ Compose starts PostgreSQL on 5432, Redis on 6379, the control plane on 8000, and
 Create `frontend/field-cleanup/.env.local` with these local defaults:
 
 ```dotenv
-NEXT_PUBLIC_API_BASE=http://localhost:8000/api/v1
-CONTROL_PLANE_URL=http://127.0.0.1:8000
-TOOL_GATEWAY_URL=http://127.0.0.1:8080
+NEXT_PUBLIC_CONTROL_PLANE_URL=http://localhost:8000
+NEXT_PUBLIC_TOOL_GATEWAY_URL=http://localhost:8080
 ```
 
 | Variable | Used by | Purpose |
 | --- | --- | --- |
+| `NEXT_PUBLIC_CONTROL_PLANE_URL` | Browser and server | Control-plane origin; `/api/v1` is appended for API requests |
+| `NEXT_PUBLIC_TOOL_GATEWAY_URL` | Next.js server | Gateway proxy fallback |
 | `NEXT_PUBLIC_API_BASE` | Browser | Control-plane API URL, including `/api/v1` |
 | `CONTROL_PLANE_URL` | Next.js server | Control-plane health check; defaults to the API base or port 8000 |
 | `TOOL_GATEWAY_URL` | Next.js server | Gateway proxy and Salesforce health check |
@@ -105,12 +108,12 @@ All data tables show at most 15 rows per page with Previous/Next controls. Mobil
 
 ### Overview and Agents
 
-Overview summarizes agents, recent proposals, approval backlog, and audit activity. Agents supports registration and recorded status changes, including PAUSED and TERMINATED. These status changes do not directly stop an external worker or enforce an emergency execution stop.
+Overview summarizes agents, recent proposals, approval backlog, and audit activity. Agents registers `{name, type, config}` and sends status changes as a JSON body. Agent IDs are assigned by the API; missing ownership/model metadata is shown as not supplied. These status changes do not directly stop an external worker or enforce an emergency execution stop.
 
 ### Dependency Viewer: assess an individual field
 
 1. Select an object and field.
-2. Choose **Analyze dependencies** to create and execute a governed read-only assessment.
+2. Choose **Analyze dependencies** to fetch field usage and reference scans through the Salesforce proxy.
 3. Review **Field intelligence** for metadata, field type, permissions, and description.
 4. Review **Assessment result** for population, reference counts, scan coverage, findings, and diagnostics. Export the assessment as JSON when needed.
 5. Inspect the dependency table and resolve incomplete checks before proposing cleanup.
@@ -121,7 +124,7 @@ A zero population/reference count is evidence for review, not proof that externa
 ### Field Tools: bulk scan and recovery
 
 - **Bulk scan:** select objects and a population threshold. Review cleanup candidates, fields with dependencies, active fields, skipped checks, and object errors. Inspect a result in Dependency Viewer or create proposals for selected eligible fields. A bulk batch creates separate proposals per field; eligibility is checked for the selected action.
-- **Backup recovery:** choose a backup from the latest 100 completed proposals or enter a backup ID. Supply a reason and confirmation to create a governed description-restoration proposal. Results refresh automatically.
+- **Backup recovery:** choose a backup from the returned completed proposals or enter a backup ID. Supply a reason and confirmation to create a governed description-restoration proposal. Results refresh automatically.
 - **Tool catalog:** browse the live gateway capabilities and tiers.
 
 Backups preserve metadata. Recovery restores a description only; it does not restore deleted fields, record data, or field-level security. Deprecation tags the description and leaves field-level security unchanged.
@@ -132,7 +135,7 @@ Open `/approvals` directly or use the sidebar.
 
 Pending proposals show their target, tool, and tier. Open the evidence dialog to load current metadata, population, and dependency details. These checks are **live evidence**, not a stored snapshot from proposal submission; incomplete checks are shown explicitly.
 
-Enter a reviewer email and an audited reason (at least eight characters), then approve or reject. Approval dispatches execution; rejection does not execute or roll back a change. The latest approved execution panel refreshes every three seconds and displays failures or results. Reviewer email is currently self-reported, not an authenticated identity.
+Enter a decision reason (at least eight characters), then approve or reject. The request sends only `decision` and `reason`; the response contains `DECIDED` and `decided_at`. Decisions do not automatically execute a proposal. Execution is available in Proposals when approval is known from the detail response or from a successful approval submitted in the current browser session. `DECIDED` alone does not imply approval.
 
 ### Proposals
 
@@ -142,19 +145,14 @@ The list and timeline refresh every ten seconds while the browser tab is visible
 
 ### Audit Trail and compliance reports
 
-Open `/audit` directly or use the sidebar. Signature badges show the first 16 characters; the copy button copies the full HMAC SHA-256 signature and reports clipboard errors.
+Open `/audit` directly or use the sidebar. Audit supports both the handoff format (`id`, `event_type`, `actor`, `proposal_id`, `payload`, `hmac_signature`, `created_at`) and the compact format (`timestamp`, `action`, `details`). Returned signatures appear as their first 16 characters with a copy control; presence is labelled unverified. Missing signatures remain unavailable. Reports include supplied signatures.
 
-Search/filter the latest 500 audit records by date, actor, action, and content. Open an event to inspect its payload and signature.
+- **Verify proposal:** enter a proposal ID and verification token. The request sends `{proposal_id, verification_token}`. Because the response schema was not specified, the UI displays the returned response and does not assign verification badges to individual events.
+- **Download CSV / Print / Save PDF:** export the filtered returned events. These exports do not claim signature verification.
 
-- **Verify signatures:** asks the control plane to verify the filtered records without exposing the HMAC secret. Results distinguish Verified, Invalid, Missing, and Not found.
-- **Download CSV:** downloads the filtered events, proposal IDs, payloads, and verification statuses.
-- **Print / Save PDF:** opens a printable report. Choose **Print / Save as PDF** in that report and select your browser's PDF destination. Allow popups if the report is blocked.
+### Policy Manager and Settings
 
-Verification covers the **event payload only**, not the complete record, log ordering, or append-only storage guarantees. A signature being present does not mean it was verified. Reports cover the filtered subset of the latest 500 events, not the entire database history. Audit data refreshes every ten seconds while the tab is visible.
-
-### Policy Manager, Settings, and unavailable areas
-
-Policy Manager displays the active mode and loaded YAML rules; it does not edit policies. Settings shows connectivity and current capabilities. Digital Boardroom, Cost Dashboard, scoped Kill Switches, and Drift Monitor identify unavailable backend features rather than presenting fabricated live data.
+Policy Manager displays the returned array of `{policy_id, rules}`. No enforcement mode or rule tiers are assumed. Settings shows the configured API URL and endpoint information. Unimplemented navigation pages have been removed.
 
 ## API reference
 
@@ -163,18 +161,17 @@ Control-plane paths below are relative to `NEXT_PUBLIC_API_BASE`.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET, POST | `/agents/` | List/register agents |
-| GET | `/agents/{agent_id}` | Agent details |
-| PATCH | `/agents/{agent_id}/status?status=PAUSED` | Recorded agent status |
-| GET | `/tools/` | Registered tools and tiers |
+| PATCH | `/agents/{agent_id}/status` | Update using `{status}` JSON body |
+| GET | `/tools/` | Tool IDs, descriptions, and parameters |
 | POST | `/proposals/` | Create and evaluate a proposal |
-| GET | `/proposals/?status=COMPLETED&limit=20&offset=0` | Paginated/filterable proposals |
+| GET | `/proposals/` | Summaries; frontend loads detail endpoints and filters locally |
 | GET | `/proposals/queue/pending` | Human-review queue |
 | GET | `/proposals/{id}` | Proposal status and results |
-| PUT | `/proposals/{id}/decide` | Human decision |
-| POST | `/proposals/{id}/execute` | Dispatch an approved proposal |
-| GET | `/audit/?limit=500` | Recent events; also accepts `event_type` and `proposal_id` |
-| POST | `/audit/verify` | Verify payload signatures; body: `{ "ids": ["<audit-event-uuid>"] }` |
-| GET | `/policies/` | Loaded policy rules and mode |
+| PUT | `/proposals/{id}/decide` | Send `{decision, reason}`; receive `{status, decided_at}` |
+| POST | `/proposals/{id}/execute` | Receive `{execution_id, result, status}` |
+| GET | `/audit/` | Events containing timestamp, action, and details |
+| POST | `/audit/verify` | Send `{proposal_id, verification_token}` |
+| GET | `/policies/` | Array of policy IDs and rules |
 
 Next.js exposes `/api/control-plane/health`, `/api/salesforce/health`, `/api/salesforce/tools`, and POST `/api/salesforce/{operation}` for describe, field-metadata, field-usage, scan-references, bulk-scan, and allowlisted read-only execution.
 
@@ -218,7 +215,7 @@ Use browser responsive mode at approximately 375px, 768px, and 1440px:
 3. Test loading, empty, partial-scan, and connection-error states.
 4. Filter and paginate proposals; open details and inspect the activity timeline.
 5. Open approval evidence and navigate the dialog by keyboard, including Tab and Escape.
-6. Verify audit signatures, download filtered CSV, and print/save a PDF.
+6. Inspect supplied audit signatures, download filtered CSV, and print/save a PDF. Use proposal/token verification only with a backend that supports that contract.
 7. On a disposable sandbox field only, test the full proposal → approval → execution → audit flow. Confirm failures remain visible and standard/managed/Person Account protections apply.
 
 No browser automation is currently included. Live mutation tests can change Salesforce; use a disposable sandbox and review the field before confirming.
@@ -238,7 +235,7 @@ No browser automation is currently included. Live mutation tests can change Sale
 | Invalid audit signature | Review the record and signing-secret configuration; changing the secret invalidates existing signatures |
 | No realtime connection | Expected with the bundled backend; supported screens use polling |
 | PDF report does not open | Allow popups, then use the report's Print / Save as PDF button |
-| Older events/proposals absent | Paginate proposals; audit reports currently cover the latest 500 events |
+| Older events/proposals absent | Paginate proposals; audit reports cover the events returned by the API |
 
 From the repository root, inspect services without deleting data:
 
@@ -252,3 +249,39 @@ Use `docker compose up -d --build` after dependency/image changes. To stop the s
 ## Important current limits
 
 The local application supports governance workflows but is not a complete production security boundary. Direct gateway mutation endpoints do not yet validate approval tokens, reviewers are not authenticated, agent pause is not enforced at proposal execution, and scoped emergency stops are missing. Precedent storage exists in Python workflows, but UI decisions are not automatically recorded into it. WebSocket broadcasting, complete audit-history exports, and full field/data recovery remain backend work.
+
+## Phase 3 frontend integration
+
+Approval Queue and Audit Log load control-plane decisions and timestamp/action/details records using the supplied endpoint contract. Proposals supports status filtering, execution, results, and errors. Bulk Scan supports selected objects or all objects; select candidates to submit governed deprecation proposals. Dependency Viewer accepts an `Object.Field` shortcut and calls the gateway usage and reference scans through the Next.js proxy. Field mutations continue through control-plane proposals.
+
+Copy `.env.example` to `.env.local` for local API defaults. Backend services and Salesforce connectivity are required for live results. The frontend changes do not implement the backend wiring tasks in the Phase 3 handoff.
+
+### Asynchronous execution responses
+
+Execution accepts either `{execution_id, status: "SUCCESS", result}` or a proposal returned with `EXECUTING`, `COMPLETED`, or `FAILED`. `EXECUTING` is an accepted operation, not a failure. Dependency Viewer polls the existing proposal every two seconds for up to five minutes, without repeating the execution POST. If it is still running, the UI directs users to Proposals. Proposal and recovery views continue refreshing asynchronously. The UI uses the proposal ID when the server does not provide an execution ID, and displays backend failure messages.
+
+### Tool Gateway contract (port 8080)
+
+Browser requests use the Next.js `/api/salesforce/*` proxy. Describe Global sends a POST with no body. Describe sends `{object_name}`; metadata, usage, reference scans, and full assessment send `{object_name, field_name}`. Bulk Scan sends `{object_names, threshold_percentage}`; generic read execution sends `{tool_name, arguments}`. Dependency Viewer includes a full-assessment action that displays the returned object or text.
+
+Gateway responses may be structured JSON or JSON encoded inside a JSON string. Both are decoded. A plain message remains a message; screens requiring structured fields show a clear error rather than inventing scan findings. A successful string health response establishes gateway reachability only; Salesforce connectivity and organization details remain unknown unless explicitly returned.
+
+Backup, deprecation, deletion, and rollback remain governed proposals. Their tool arguments match the gateway DTOs: backup uses object/field names; deprecation adds reason; deletion adds confirmation and reason; rollback sends only backup ID. The frontend strips extra aliases before proposal submission. The control plane dispatches the approved operation to the gateway.
+
+### Reviewer identity compatibility
+
+The approval/rejection dialog requires reviewer email because the repository backend's `HumanDecision` schema requires `reviewer_email`. It sends this alongside decision and reason. The API client accepts both a full proposal decision response (`HUMAN_APPROVED` / `HUMAN_REJECTED`) and the documented compact `DECIDED` response. Validation errors display field names and messages without echoing request values.
+
+### Proposal history pagination
+
+Proposals sends status, limit, and offset to the backend. The HUMAN_REJECTED filter searches rejected proposals across backend history rather than filtering only the default first 50 records. Rows remain visible if fetching supplemental detail fails; opening the detail dialog allows retry. Full proposal rows are used directly without unnecessary per-row requests.
+
+### Phase 3 response compatibility
+
+Audit requests load 50 events by default. Proposal timelines request proposal-specific events (up to 500), filter by proposal ID, and sort chronologically. The mapper preserves event IDs, timestamps, actors, payloads, signatures, and proposal links for the handoff format while continuing to accept compact events. A signature is never labelled verified solely because it is present.
+
+Bulk Scan accepts either the gateway's existing flat arrays or the document's `{scan_summary, objects: [{object_name, fields}]}` format, including JSON-encoded responses. Nested classifications map to the existing cleanup/review/active filters. The UI does not invent missing record counts, reference counts, field types, or scan timestamps. Selecting a candidate and submitting deprecation uses the same object and field names from either format.
+
+## Live frontend verification
+
+See [FRONTEND_VERIFICATION.md](./FRONTEND_VERIFICATION.md) for the completed read-only browser checks, observed bulk-scan results, fixes, and remaining live-write verification limits.

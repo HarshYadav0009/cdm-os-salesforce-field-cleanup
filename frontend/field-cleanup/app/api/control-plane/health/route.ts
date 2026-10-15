@@ -2,6 +2,7 @@ export async function GET() {
   try {
     const base = (
       process.env.CONTROL_PLANE_URL ??
+      process.env.NEXT_PUBLIC_CONTROL_PLANE_URL ??
       process.env.NEXT_PUBLIC_API_BASE ??
       "http://127.0.0.1:8000"
     )
@@ -17,7 +18,7 @@ export async function GET() {
       typeof result !== "object" ||
       result === null ||
       !("status" in result) ||
-      result.status !== "ok"
+      (result.status !== "healthy" && result.status !== "ok")
     ) {
       return Response.json({ status: "offline" }, { status: 503 });
     }

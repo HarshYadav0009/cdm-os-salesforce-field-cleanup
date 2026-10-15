@@ -5,67 +5,54 @@ import type {
   ToolDefinition,
 } from "@/types/governance";
 
-const DEFAULT_API_BASE = "http://localhost:8000/api/v1";
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? DEFAULT_API_BASE;
+import { gatewayArguments } from "./gatewayResponse";
+import { proposalView } from "./contracts";
+import { api as request } from "./client";
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+export type RegisterAgentPayload = { name: string; type: string; config: Record<string, unknown> };
+export interface PolicyConfiguration { policy_id: string; rules: unknown[]; mode?: string }
+const recordedDecisions = new Map<string, "APPROVED" | "REJECTED">();
+export const getRecordedDecision = (proposalId: string) => recordedDecisions.get(proposalId);
 
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers ?? {}),
-    },
-    credentials: "include",
-  });
+export interface DecisionResponse { status: "DECIDED" | "HUMAN_APPROVED" | "HUMAN_REJECTED"; decided_at: string }
+export interface ExecutionResponse {
+  execution_id?: string;
+  result: Record<string, unknown>;
+  status: "SUCCESS" | "FAILED" | "EXECUTING";
+  error_message?: string;
+}
 
-  if (!response.ok) {
-    const detail = await response.text();
-    let message = detail;
-
-    try {
-      const parsed = JSON.parse(detail) as { detail?: string; message?: string };
-      message = parsed.detail ?? parsed.message ?? detail;
-    } catch {
-      // fall back to raw body when the server does not return JSON
-    }
-
-    throw new Error(message || `${response.status} ${response.statusText}`);
+export function executionResponse(value: unknown): ExecutionResponse {
+  if (!value || typeof value !== "object") throw new Error("Invalid execution response.");
+  const source = value as Record<string, unknown>;
+  const status = source.status === "COMPLETED" ? "SUCCESS" : source.status;
+  if (status !== "SUCCESS" && status !== "FAILED" && status !== "EXECUTING") {
+    throw new Error(`Unexpected execution status: ${String(source.status)}. Check the proposal before retrying.`);
   }
+  const result = source.result ?? source.execution_result;
+  return {
+    status,
+    result: result && typeof result === "object" && !Array.isArray(result) ? result as Record<string, unknown> : {},
+    ...(typeof source.execution_id === "string" ? { execution_id: source.execution_id } : {}),
+    ...(typeof source.error_message === "string" ? { error_message: source.error_message } : {}),
+  };
+}
 
-  if (response.status === 204) {
-    return undefined as T;
+// Poll only the existing proposal. Never repeat the execution POST.
+export async function waitForExecution(
+  proposalId: string,
+  initial: ExecutionResponse,
+  { intervalMs = 2000, maxAttempts = 150 }: { intervalMs?: number; maxAttempts?: number } = {},
+): Promise<ExecutionResponse> {
+  let current = initial;
+  for (let attempt = 0; current.status === "EXECUTING" && attempt < maxAttempts; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    const proposal = await GovernanceAPI.getProposal(proposalId);
+    current = { ...executionResponse(proposal), ...(current.execution_id ? { execution_id: current.execution_id } : {}) };
   }
-
-  return (await response.json()) as T;
+  return current;
 }
-
-export type RegisterAgentPayload = {
-  agent_id: string;
-  name: string;
-  version: string;
-  description: string;
-  owner: string;
-  model_primary: string;
-  model_fallback: string;
-  config_yaml: string;
-};
-
-export interface PolicyRule {
-  id: string;
-  action: string;
-  source_file: string;
-  tier: string | null;
-  conditions: Record<string, unknown>;
-  enforcement: Record<string, unknown>;
-}
-
-export interface PolicyConfiguration {
-  mode: string;
-  rule_count: number;
-  rules: PolicyRule[];
-}
+export interface AuditVerificationResponse { [key: string]: unknown }
 
 export interface CreateProposalPayload {
   agent_id: string;
@@ -75,22 +62,22 @@ export interface CreateProposalPayload {
 
 export const GovernanceAPI = {
 // ================================================================================================= Policies
-  getPolicies: async (): Promise<PolicyConfiguration> => {
-    return request<PolicyConfiguration>("/policies/");
+  getPolicies: async (signal?: AbortSignal): Promise<PolicyConfiguration[]> => {
+    return request<PolicyConfiguration[]>("/policies/", { signal, cache: "no-store" });
   },
 
 // ================================================================================================= Proposals
   getPendingProposals: async (): Promise<Proposal[]> => {
-    return request<Proposal[]>("/proposals/");
+    return request<Proposal[]>("/proposals/queue/pending");
   },
 
-  listProposals: async (params?: { status?: string; agent_id?: string }): Promise<Proposal[]> => {
-    const search = new URLSearchParams();
-    if (params?.status) search.set("status", params.status);
-    if (params?.agent_id) search.set("agent_id", params.agent_id);
-
-    const query = search.toString();
-    return request<Proposal[]>(`/proposals/${query ? `?${query}` : ""}`);
+  listProposals: async (params?: { status?: string; agent_id?: string; limit?: number; offset?: number }): Promise<Proposal[]> => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set("status", params.status);
+    if (params?.agent_id) query.set("agent_id", params.agent_id);
+    if (params?.limit !== undefined) query.set("limit", String(params.limit));
+    if (params?.offset !== undefined) query.set("offset", String(params.offset));
+    return request<Proposal[]>(`/proposals/${query.size ? `?${query}` : ""}`);
   },
 
   getProposal: async (id: string): Promise<Proposal> => {
@@ -98,38 +85,43 @@ export const GovernanceAPI = {
   },
 
   createProposal: async (payload: CreateProposalPayload): Promise<Proposal> => {
-    return request<Proposal>("/proposals/", {
+    return proposalView(await request<unknown>("/proposals/", {
       method: "POST",
-      body: JSON.stringify(payload),
-    });
+      body: JSON.stringify({ ...payload, input_payload: gatewayArguments(payload.tool_id, payload.input_payload) }),
+    }));
   },
 
   submitDecision: async (
     proposalId: string,
     decision: "APPROVED" | "REJECTED",
-    reviewerEmail: string,
     reason: string,
-  ): Promise<Proposal> => {
-    return request<Proposal>(`/proposals/${encodeURIComponent(proposalId)}/decide`, {
+    reviewerEmail?: string,
+  ): Promise<DecisionResponse> => {
+    const result = await request<DecisionResponse>(`/proposals/${encodeURIComponent(proposalId)}/decide`, {
       method: "PUT",
       body: JSON.stringify({
         decision,
-        reviewer_email: reviewerEmail,
         reason,
+        ...(reviewerEmail?.trim() ? { reviewer_email: reviewerEmail.trim() } : {}),
       }),
     });
+    if (["DECIDED", "HUMAN_APPROVED", "HUMAN_REJECTED"].includes(result.status)) recordedDecisions.set(proposalId, decision);
+    return result;
   },
 
-  executeProposal: async (proposalId: string): Promise<Proposal> => {
-    return request<Proposal>(`/proposals/${encodeURIComponent(proposalId)}/execute`, {
+  executeProposal: async (proposalId: string): Promise<ExecutionResponse> => {
+    return executionResponse(await request<unknown>(`/proposals/${encodeURIComponent(proposalId)}/execute`, {
       method: "POST",
-    });
+    }));
   },
+
+  verifyAudit: (proposal_id: string, verification_token: string) =>
+    request<AuditVerificationResponse>("/audit/verify", {
+      method: "POST", body: JSON.stringify({ proposal_id, verification_token }),
+    }),
 
 // ================================================================================================= Audit Log
-  getAuditLog: async (limit = 50): Promise<AuditLogEntry[]> => {
-    return request<AuditLogEntry[]>(`/audit/?limit=${encodeURIComponent(String(limit))}`);
-  },
+  getAuditLog: async (limit = 50): Promise<AuditLogEntry[]> => request<AuditLogEntry[]>(`/audit/?limit=${encodeURIComponent(String(limit))}`),
 
 // ================================================================================================= Agents
   getAgents: async (): Promise<Agent[]> => {
@@ -137,11 +129,14 @@ export const GovernanceAPI = {
   },
 
   getAgent: async (agentId: string): Promise<Agent> => {
-    return request<Agent>(`/agents/${encodeURIComponent(agentId)}`);
+    const agents = await request<Agent[]>("/agents/");
+    const agent = agents.find((item) => item.agent_id === agentId);
+    if (!agent) throw new Error("Agent not found.");
+    return agent;
   },
 
-  registerAgent: async (payload: RegisterAgentPayload): Promise<Agent> => {
-    return request<Agent>("/agents/", {
+  registerAgent: async (payload: RegisterAgentPayload): Promise<{ agent_id: string; status: string }> => {
+    return request<{ agent_id: string; status: string }>("/agents/", {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -151,10 +146,9 @@ export const GovernanceAPI = {
     agentId: string,
     status: Agent["status"],
   ): Promise<{ agent_id: string; status: Agent["status"] }> => {
-    const query = new URLSearchParams({ status });
-    return request<{ agent_id: string; status: Agent["status"] }>(
-      `/agents/${encodeURIComponent(agentId)}/status?${query.toString()}`,
-      { method: "PATCH" },
+    return request<{ agent_id: string; status: string }>(
+      `/agents/${encodeURIComponent(agentId)}/status`,
+      { method: "PATCH", body: JSON.stringify({ status }) },
     );
   },
 

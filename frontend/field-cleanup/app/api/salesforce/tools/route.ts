@@ -2,6 +2,7 @@ export async function GET() {
   const gatewayUrl = (
     process.env.TOOL_GATEWAY_URL ??
     process.env.MCP_GATEWAY_URL ??
+    process.env.NEXT_PUBLIC_TOOL_GATEWAY_URL ??
     "http://127.0.0.1:8080"
   ).replace(/\/$/, "");
   try {

@@ -247,7 +247,7 @@ function HmacBadge({
     Present: { label: "Unverified", icon: ShieldQuestion, color: "border-amber-500/25 bg-amber-500/10 text-amber-400", hint: "Signature present; verification has not been performed" },
     Invalid: { label: "Invalid", icon: AlertTriangle, color: "border-red-500/25 bg-red-500/10 text-red-400", hint: "Event payload signature failed verification" },
     "Not found": { label: "Not found", icon: AlertTriangle, color: "border-slate-500/25 bg-slate-500/10 text-slate-400", hint: "Audit record was not found during verification" },
-    Missing: { label: "Missing", icon: ShieldQuestion, color: "border-slate-500/25 bg-slate-500/10 text-slate-400", hint: "The backend returned no HMAC signature" },
+    Missing: { label: "Not supplied", icon: ShieldQuestion, color: "border-slate-500/25 bg-slate-500/10 text-slate-400", hint: "This API response does not supply an HMAC signature" },
   }[status];
   const Icon = appearance.icon;
 

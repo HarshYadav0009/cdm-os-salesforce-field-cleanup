@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./client";
 
-export function useApiResource<T>(path: string, sample: T) {
-  const [data, setData] = useState(sample);
+export function useApiResource<T>(path: string, initialData: T) {
+  const [data, setData] = useState(initialData);
   const [revision, setRevision] = useState(0);
   const [requestState, setRequestState] = useState<{
     path: string;
@@ -13,9 +13,11 @@ export function useApiResource<T>(path: string, sample: T) {
   }>({ path, revision: -1, error: null });
 
   useEffect(() => {
+    if (!path) return;
     const controller = new AbortController();
     api<T>(path, { signal: controller.signal })
       .then((nextData) => {
+        if (controller.signal.aborted) return;
         setData(nextData);
         setRequestState({ path, revision, error: null });
       })
@@ -33,7 +35,7 @@ export function useApiResource<T>(path: string, sample: T) {
   const reload = useCallback(() => setRevision((value) => value + 1), []);
   return {
     data,
-    loading: requestState.path !== path || requestState.revision !== revision,
+    loading: !!path && (requestState.path !== path || requestState.revision !== revision),
     error: requestState.path === path && requestState.revision === revision ? requestState.error : null,
     reload,
     setData,
