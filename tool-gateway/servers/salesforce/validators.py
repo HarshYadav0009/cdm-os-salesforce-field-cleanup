@@ -109,6 +109,7 @@ TOOL_PAYLOAD_SCHEMAS = {
     "salesforce_get_field_metadata": FieldUsageSchema,
     "salesforce_query_field_usage": FieldUsageSchema,
     "salesforce_scan_apex_references": ScanApexReferencesSchema,
+    "salesforce_full_field_assessment": FieldUsageSchema,
     "salesforce_deprecate_field": DeprecateFieldSchema,
     "salesforce_backup_field_definition": BackupFieldSchema,
     "salesforce_delete_field": DeleteFieldSchema,

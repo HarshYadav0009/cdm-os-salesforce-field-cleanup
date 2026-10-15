@@ -128,6 +128,19 @@ async def scan_references(request: FieldRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.post("/tools/salesforce/full-assessment")
+def full_field_assessment(request: FieldRequest):
+    try:
+        return gateway.full_field_assessment(
+            request.object_name,
+            request.field_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.post("/tools/salesforce/backup")
 async def backup_field(request: FieldRequest):
     try:

@@ -17,6 +17,7 @@ import logging
 import re
 
 from .client import SalesforceClient
+from .apex_scanner import SalesforceApexScanner
 from .validators import validate_salesforce_identifier
 
 logger = logging.getLogger("cdm.apex_scanner")
@@ -30,6 +31,7 @@ class ApexReferenceScanner:
 
     def __init__(self, client: SalesforceClient = None):
         self.client = client or SalesforceClient()
+        self.code_scanner = SalesforceApexScanner(client=self.client)
 
     # ──────────────────────────────────────────────────────────────
     # 1. APEX CLASSES
@@ -298,13 +300,14 @@ class ApexReferenceScanner:
 
     def full_scan(self, object_name: str, field_name: str) -> dict:
         """
-        Run all reference scans and return a combined result.
+        Scan code, Lightning components, and metadata references into one result.
         """
         logger.info(f"Starting full reference scan for {object_name}.{field_name}")
 
-        apex_classes = self.scan_apex_classes(field_name)
-        apex_triggers = self.scan_apex_triggers(object_name, field_name)
-        flows = self.scan_flows(object_name, field_name)
+        apex_classes = self.code_scanner.scan_apex_classes(field_name)
+        apex_triggers = self.code_scanner.scan_apex_triggers(object_name, field_name)
+        flows = self.code_scanner.scan_flows(field_name)
+        lwcs = self.code_scanner.scan_lwc(field_name)
         validation_rules = self.scan_validation_rules(object_name, field_name)
         layouts = self.scan_layouts(object_name, field_name)
         history_tracked = self.scan_history_tracking(object_name, field_name)
@@ -313,6 +316,7 @@ class ApexReferenceScanner:
         apex_hits = [r for r in apex_classes if "scan_error" not in r]
         trigger_hits = [r for r in apex_triggers if "scan_error" not in r]
         flow_hits = [r for r in flows if "scan_error" not in r]
+        lwc_hits = [r for r in lwcs if "scan_error" not in r]
         validation_hits = [r for r in validation_rules if "scan_error" not in r]
         layout_hits = [r for r in layouts if "scan_error" not in r]
 
@@ -320,6 +324,7 @@ class ApexReferenceScanner:
             len(apex_hits)
             + len(trigger_hits)
             + len(flow_hits)
+            + len(lwc_hits)
             + len(validation_hits)
             + len(layout_hits)
         )
@@ -330,6 +335,7 @@ class ApexReferenceScanner:
             "apex_classes": apex_classes,
             "apex_triggers": apex_triggers,
             "flows": flows,
+            "lwcs": lwcs,
             "validation_rules": validation_rules,
             "layouts": layouts,
             "history_tracking_enabled": history_tracked,

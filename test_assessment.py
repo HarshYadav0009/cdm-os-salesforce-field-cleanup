@@ -117,6 +117,7 @@ def run_assessment_test():
         {"records": []}, # ApexClass
         {"records": []}, # ApexTrigger
         {"records": []}, # Flow
+        {"records": []}, # LightningComponentResource
         {"records": []}, # ValidationRule
         {"records": []}, # MetadataComponentDependency Layouts
     ]
@@ -162,6 +163,7 @@ def run_assessment_test():
         }, # ApexClass hit!
         {"records": []}, # ApexTrigger
         {"records": []}, # Flow
+        {"records": []}, # LightningComponentResource
         {"records": []}, # ValidationRule
         {"records": []}, # Layout
     ]

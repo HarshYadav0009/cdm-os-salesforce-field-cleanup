@@ -21,6 +21,7 @@ import type { Proposal, ToolDefinition } from "@/types/governance";
 interface FieldAnalysis {
   usage: SalesforceFieldUsage;
   references: SalesforceReferenceScan;
+  referenceScanErrors: string[];
 }
 
 const ANALYSIS_AGENT_ID = "field-cleanup-agent";
@@ -31,78 +32,133 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isSalesforceFieldUsage(
-  value: unknown,
-): value is SalesforceFieldUsage {
-  return (
-    isRecord(value) &&
-    typeof value.object === "string" &&
-    typeof value.field === "string" &&
-    typeof value.total_records === "number" &&
-    typeof value.populated_records === "number" &&
-    typeof value.usage_percentage === "number" &&
-    typeof value.zero_usage_candidate === "boolean" &&
-    typeof value.recommendation_hint === "string"
-  );
-}
+function getFieldAssessmentResults(proposal: Proposal): FieldAnalysis {
+  const result = proposal.execution_result;
+  if (
+    !isRecord(result) ||
+    !isRecord(result.data_usage) ||
+    !isRecord(result.reference_scan) ||
+    typeof result.object_api_name !== "string" ||
+    typeof result.field_api_name !== "string" ||
+    typeof result.assessment_summary !== "string"
+  ) {
+    throw new Error("The field assessment proposal returned an invalid result.");
+  }
 
-function isSalesforceReferenceScan(
-  value: unknown,
-): value is SalesforceReferenceScan {
-  return (
-    isRecord(value) &&
-    typeof value.has_references === "boolean" &&
-    typeof value.reference_count === "number" &&
-    typeof value.summary === "string" &&
-    Array.isArray(value.all_references) &&
-    value.all_references.every((reference) => {
-      if (!isRecord(reference) || typeof reference.type !== "string") {
-        return false;
+  const usage = result.data_usage;
+  if (
+    typeof usage.total_records !== "number" ||
+    typeof usage.populated_records !== "number" ||
+    typeof usage.usage_percentage !== "number" ||
+    typeof usage.zero_usage_candidate !== "boolean"
+  ) {
+    throw new Error("The field assessment proposal returned invalid usage data.");
+  }
+
+  const referenceScan = result.reference_scan;
+  const referenceGroups: [string, unknown][] = [
+    ["ApexClass", referenceScan.apex_classes],
+    ["ApexTrigger", referenceScan.apex_triggers],
+    ["Flow", referenceScan.flows],
+    ["LightningComponentBundle", referenceScan.lwcs],
+    ["ValidationRule", referenceScan.validation_rules],
+    ["Layout", referenceScan.layouts],
+  ];
+  if (
+    typeof referenceScan.total_metadata_references !== "number" ||
+    typeof referenceScan.history_tracking_enabled !== "boolean" ||
+    referenceGroups.some(([, references]) => !Array.isArray(references))
+  ) {
+    throw new Error("The field assessment proposal returned invalid reference data.");
+  }
+
+  const referenceScanErrors: string[] = [];
+  const allReferences = referenceGroups.flatMap(([category, references]) =>
+    (references as unknown[]).flatMap((reference) => {
+      if (!isRecord(reference)) return [];
+      if (typeof reference.scan_error === "string") {
+        referenceScanErrors.push(`${category}: ${reference.scan_error}`);
+        return [];
       }
-      return (
-        (reference.id === undefined || typeof reference.id === "string") &&
-        (reference.name === undefined || typeof reference.name === "string") &&
-        (reference.line_number === undefined ||
-          typeof reference.line_number === "number") &&
-        (reference.snippet === undefined ||
-          typeof reference.snippet === "string") &&
-        (reference.description === undefined ||
-          typeof reference.description === "string")
-      );
-    })
+
+      const name =
+        typeof reference.name === "string" ? reference.name : undefined;
+      const snippet =
+        typeof reference.first_match_snippet === "string"
+          ? reference.first_match_snippet
+          : typeof reference.snippet === "string"
+            ? reference.snippet
+            : typeof reference.formula_snippet === "string"
+              ? reference.formula_snippet
+              : typeof reference.description === "string"
+                ? reference.description
+                : category === "Layout"
+                  ? "Field is present on this layout."
+                  : category === "Flow"
+                    ? "Field is referenced by this flow."
+                    : undefined;
+      const lineNumber =
+        typeof reference.first_match_line === "number"
+          ? reference.first_match_line
+          : typeof reference.line_number === "number"
+            ? reference.line_number
+            : undefined;
+      return [
+        {
+          type:
+            typeof reference.type === "string" ? reference.type : category,
+          ...(typeof reference.id === "string" ? { id: reference.id } : {}),
+          ...(name ? { name } : {}),
+          ...(lineNumber !== undefined ? { line_number: lineNumber } : {}),
+          ...(snippet ? { snippet } : {}),
+          ...(typeof reference.formula_snippet === "string"
+            ? { description: reference.formula_snippet }
+            : {}),
+        },
+      ];
+    }),
   );
-}
 
-function getUsageResult(proposal: Proposal): SalesforceFieldUsage {
-  const result = proposal.execution_result;
-  if (!isSalesforceFieldUsage(result)) {
-    throw new Error("The field-usage proposal returned an invalid result.");
-  }
-  return result;
-}
+  const usageResult: SalesforceFieldUsage = {
+    object: result.object_api_name,
+    field: result.field_api_name,
+    total_records: usage.total_records,
+    populated_records: usage.populated_records,
+    usage_percentage: usage.usage_percentage,
+    zero_usage_candidate: usage.zero_usage_candidate,
+    recommendation_hint: usage.zero_usage_candidate
+      ? "Candidate for deprecation (0% population) - check references before deletion"
+      : `In use (${usage.usage_percentage}% populated) - retain`,
+  };
+  const referenceResult: SalesforceReferenceScan = {
+    has_references:
+      referenceScan.total_metadata_references > 0 ||
+      referenceScan.history_tracking_enabled,
+    reference_count: referenceScan.total_metadata_references,
+    summary: result.assessment_summary,
+    all_references: allReferences,
+  };
 
-function getReferenceResult(proposal: Proposal): SalesforceReferenceScan {
-  const result = proposal.execution_result;
-  if (!isSalesforceReferenceScan(result)) {
-    throw new Error("The reference-scan proposal returned an invalid result.");
-  }
-  return result;
+  return {
+    usage: usageResult,
+    references: referenceResult,
+    referenceScanErrors,
+  };
 }
 
 async function executeAnalysisProposal(
-  toolId: string,
   objectName: string,
   fieldName: string,
 ): Promise<Proposal> {
   const proposal = await GovernanceAPI.createProposal({
     agent_id: ANALYSIS_AGENT_ID,
-    tool_id: toolId,
+    tool_id: "salesforce_full_field_assessment",
     input_payload: { object_name: objectName, field_name: fieldName },
   });
 
   if (proposal.status !== "POLICY_APPROVED") {
     throw new Error(
-      `${toolId} proposal was not approved for automatic execution (${proposal.status}).`,
+      `Field assessment proposal was not approved for automatic execution (${proposal.status}).`,
     );
   }
 
@@ -114,16 +170,18 @@ async function executeAnalysisProposal(
     const current = await GovernanceAPI.getProposal(proposal.id);
     if (current.status === "COMPLETED") return current;
     if (current.status === "FAILED") {
-      throw new Error(current.error_message || `${toolId} proposal execution failed.`);
+      throw new Error(
+        current.error_message || "Field assessment proposal execution failed.",
+      );
     }
     if (current.status !== "EXECUTING") {
       throw new Error(
-        `${toolId} proposal entered an unexpected state (${current.status}).`,
+        `Field assessment proposal entered an unexpected state (${current.status}).`,
       );
     }
   }
 
-  throw new Error(`${toolId} proposal did not finish before the wait timed out.`);
+  throw new Error("Field assessment proposal did not finish before the wait timed out.");
 }
 
 function toDependencies(references: SalesforceReferenceScan): Dependency[] {
@@ -431,21 +489,8 @@ export default function DependencyViewerPage() {
     setAnalysisLoading(true);
 
     try {
-      const [usageProposal, referenceProposal] = await Promise.all([
-        executeAnalysisProposal(
-          "salesforce_query_field_usage",
-          object,
-          field,
-        ),
-        executeAnalysisProposal(
-          "salesforce_scan_apex_references",
-          object,
-          field,
-        ),
-      ]);
-      const usage = getUsageResult(usageProposal);
-      const references = getReferenceResult(referenceProposal);
-      setAnalysis({ usage, references });
+      const proposal = await executeAnalysisProposal(object, field);
+      setAnalysis(getFieldAssessmentResults(proposal));
     } catch (error) {
       const message =
         error instanceof Error
@@ -472,6 +517,9 @@ export default function DependencyViewerPage() {
       ? [
           `Population scan: ${analysis.usage.recommendation_hint}`,
           `Reference scan: ${analysis.references.summary}`,
+          ...analysis.referenceScanErrors.map(
+            (scanError) => `Reference scan warning: ${scanError}`,
+          ),
         ]
       : ["Select a field and run an analysis to retrieve live usage and references."],
   };

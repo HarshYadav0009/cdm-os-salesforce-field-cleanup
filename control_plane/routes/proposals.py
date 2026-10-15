@@ -328,6 +328,7 @@ async def _run_tool_execution(
     timeout = float(settings.MCP_REQUEST_TIMEOUT_SEC)
 
     endpoint_map = {
+        "salesforce_full_field_assessment": "/tools/salesforce/full-assessment",
         "salesforce_describe_object": "/tools/salesforce/describe",
         "salesforce_query_field_usage": "/tools/salesforce/field-usage",
         "salesforce_scan_apex_references": "/tools/salesforce/scan-references",
@@ -357,6 +358,7 @@ async def _run_tool_execution(
                 "salesforce_deprecate_field",
                 "salesforce_backup_field_def",
                 "salesforce_delete_field",
+                "salesforce_full_field_assessment",
             }:
                 input_payload = {
                     "object_name": input_payload.get(
