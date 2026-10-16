@@ -126,9 +126,9 @@ export default function ProposalsPage() {
             No proposals match this status on this page. Choose All statuses or return to the previous page.
           </p>
         ) : (
-          <div className="hidden overflow-x-auto md:block">
+          <div className="hidden max-h-[60vh] overflow-auto md:block">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="bg-slate-800 text-xs uppercase text-slate-300">
+              <thead className="sticky top-0 z-10 bg-slate-800 text-xs uppercase text-slate-300">
                 <tr>
                   <th className="px-4 py-3">Proposal</th>
                   <th className="px-4 py-3">Agent</th>

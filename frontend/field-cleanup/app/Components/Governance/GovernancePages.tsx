@@ -927,16 +927,23 @@ export function AgentsPage() {
   );
 }
 
+const agentStatusOptions = ["IDLE", "RUNNING", "PAUSED", "ERROR", "TERMINATED"];
+
 function AgentStatusControls({ agent, busy, updatingStatus, onUpdate }: {
   agent: Agent; busy: boolean; updatingStatus: AgentStatus | null; onUpdate: (status: AgentStatus) => void;
 }) {
-  const [nextStatus, setNextStatus] = useState(agent.status);
+  const [nextStatus, setNextStatus] = useState(
+    agentStatusOptions.includes(agent.status) ? agent.status : "",
+  );
   return <form className="mt-4 space-y-3 border-t border-slate-800 pt-4" onSubmit={(event) => {
-    event.preventDefault(); if (nextStatus.trim() && !busy) onUpdate(nextStatus.trim());
+    event.preventDefault(); if (agentStatusOptions.includes(nextStatus) && !busy) onUpdate(nextStatus);
   }}>
     <label className="block text-sm text-slate-300">Agent status
-      <input value={nextStatus} onChange={(event) => setNextStatus(event.target.value)} disabled={busy}
-        className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-2" />
+      <select value={nextStatus} onChange={(event) => setNextStatus(event.target.value)} disabled={busy}
+        className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-2">
+        <option value="" disabled>Select a status</option>
+        {agentStatusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
+      </select>
     </label>
     <button disabled={busy || !nextStatus.trim() || nextStatus === agent.status} className="rounded-lg bg-blue-600 px-4 py-2 text-sm disabled:opacity-50">
       {updatingStatus ? "Updating…" : "Update status"}
