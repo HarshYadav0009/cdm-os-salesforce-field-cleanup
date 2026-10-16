@@ -239,7 +239,9 @@ export default function Head({
           title={
             isMock
               ? "MCP is responding with Salesforce mock data."
-              : statusLabel
+              : mcpStatus === "online" && !orgType
+                ? "Tool Gateway is reachable. Salesforce organization details were not supplied."
+                : statusLabel
           }
           className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-300 sm:gap-2 sm:px-2.5 sm:text-xs"
         >

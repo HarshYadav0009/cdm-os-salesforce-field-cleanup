@@ -9,6 +9,7 @@ interface ObjectTableProps {
   onToggle: (id: string) => void;
   onToggleAll: (ids: string[], checked: boolean) => void;
   onInitiate: () => void;
+  busy?: boolean;
 }
 
 export default function ObjectTable({
@@ -17,13 +18,14 @@ export default function ObjectTable({
   onToggle,
   onToggleAll,
   onInitiate,
+  busy = false,
 }: ObjectTableProps) {
   const pagination = useTablePagination(objects);
   const allChecked =
     pagination.visibleRows.length > 0 && pagination.visibleRows.every((object) => selectedIds.includes(object.id));
   const someChecked =
     pagination.visibleRows.some((object) => selectedIds.includes(object.id)) && !allChecked;
-  const noSelection = selectedIds.length === 0;
+  const noSelection = selectedIds.length === 0 || busy;
 
   return (
     <div className="rounded-lg bg-slate-900 text-slate-200">

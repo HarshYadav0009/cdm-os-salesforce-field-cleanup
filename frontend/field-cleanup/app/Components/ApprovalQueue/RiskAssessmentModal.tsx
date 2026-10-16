@@ -12,13 +12,13 @@ interface RiskAssessmentModalProps {
   initialDecision?: "approve" | "reject";
   onApprove?: (
     row: QueueRow,
-    reviewerEmail: string,
     reason: string,
+    reviewerEmail: string,
   ) => Promise<void>;
   onReject?: (
     row: QueueRow,
-    reviewerEmail: string,
     reason: string,
+    reviewerEmail: string,
   ) => Promise<void>;
 }
 
@@ -78,9 +78,11 @@ export default function RiskAssessmentModal({
     try {
       await (decision === "approve" ? onApprove : onReject)?.(
         row,
-        reviewerEmail.trim(),
         reason.trim(),
+        reviewerEmail.trim(),
       );
+    } catch {
+      // The parent displays the API error; keep this dialog open for retry.
     } finally {
       setBusy(false);
     }
@@ -180,22 +182,10 @@ export default function RiskAssessmentModal({
           </section>
           <FieldEvidence key={row.id} payload={row.proposal.input_payload} />
           <section>
-            <label
-              htmlFor="reviewer-email"
-              className="mb-2 block text-sm font-semibold text-white"
-            >
-              Reviewer email{" "}
-              <span className="font-normal text-slate-400">(required)</span>
-            </label>
-            <input
-              id="reviewer-email"
-              type="email"
-              autoComplete="email"
-              value={reviewerEmail}
-              onChange={(event) => setReviewerEmail(event.target.value)}
-              placeholder="reviewer@example.com"
-              className="mb-4 w-full rounded-md border border-slate-700 bg-slate-950 p-2 text-sm text-slate-200 outline-none focus:border-blue-500"
-            />
+            <label htmlFor="reviewer-email" className="mb-2 block text-sm font-semibold text-white">Reviewer email (required)</label>
+            <input id="reviewer-email" type="email" autoComplete="email" required disabled={busy}
+              value={reviewerEmail} onChange={(event) => setReviewerEmail(event.target.value)}
+              className="mb-4 w-full rounded-md border border-slate-700 bg-slate-950 p-2 text-sm text-slate-200" />
             <label
               htmlFor="approval-reason"
               className="mb-2 block text-sm font-semibold text-white"

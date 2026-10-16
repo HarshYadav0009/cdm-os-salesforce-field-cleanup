@@ -46,6 +46,10 @@ class AgentCreate(BaseModel):
     config_yaml: Optional[str] = None
 
 
+class AgentStatusUpdate(BaseModel):
+    status: str = Field(..., description="IDLE, RUNNING, PAUSED, ERROR, or TERMINATED")
+
+
 class AgentResponse(BaseModel):
     id: UUID
     agent_id: str

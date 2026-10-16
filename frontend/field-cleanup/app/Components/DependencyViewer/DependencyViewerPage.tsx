@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RemediationProposals from "./RemediationProposals";
 import FieldSelectSection from "./FieldSelectSection";
 import DependentTable, { type Dependency } from "./DependentTable";
@@ -14,7 +14,7 @@ import {
   type SalesforceObjectSummary,
   type SalesforceReferenceScan,
 } from "@/app/lib/api/salesforce";
-import GovernanceAPI from "@/app/lib/api/governance";
+import GovernanceAPI, { waitForExecution } from "@/app/lib/api/governance";
 import { useApiResource } from "@/app/lib/api/useApiResource";
 import { useToast } from "@/app/Components/Toast/useToast";
 import type { Proposal, ToolDefinition } from "@/types/governance";
@@ -26,170 +26,9 @@ interface FieldAnalysis {
 }
 
 const ANALYSIS_AGENT_ID = "field-cleanup-agent";
-const PROPOSAL_POLL_INTERVAL_MS = 2000;
-const PROPOSAL_POLL_ATTEMPTS = 150;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function getFieldAssessmentResults(proposal: Proposal): FieldAnalysis {
-  const result = proposal.execution_result;
-  if (
-    !isRecord(result) ||
-    !isRecord(result.data_usage) ||
-    !isRecord(result.reference_scan) ||
-    typeof result.object_api_name !== "string" ||
-    typeof result.field_api_name !== "string" ||
-    typeof result.assessment_summary !== "string"
-  ) {
-    throw new Error(
-      "The field assessment proposal returned an invalid result.",
-    );
-  }
-
-  const usage = result.data_usage;
-  if (
-    typeof usage.total_records !== "number" ||
-    typeof usage.populated_records !== "number" ||
-    typeof usage.usage_percentage !== "number" ||
-    typeof usage.zero_usage_candidate !== "boolean"
-  ) {
-    throw new Error(
-      "The field assessment proposal returned invalid usage data.",
-    );
-  }
-
-  const referenceScan = result.reference_scan;
-  const referenceGroups: [string, unknown][] = [
-    ["ApexClass", referenceScan.apex_classes],
-    ["ApexTrigger", referenceScan.apex_triggers],
-    ["Flow", referenceScan.flows],
-    ["LightningComponentBundle", referenceScan.lwcs],
-    ["ValidationRule", referenceScan.validation_rules],
-    ["Layout", referenceScan.layouts],
-  ];
-  if (
-    typeof referenceScan.total_metadata_references !== "number" ||
-    typeof referenceScan.history_tracking_enabled !== "boolean" ||
-    referenceGroups.some(([, references]) => !Array.isArray(references))
-  ) {
-    throw new Error(
-      "The field assessment proposal returned invalid reference data.",
-    );
-  }
-
-  const referenceScanErrors: string[] = [];
-  const allReferences = referenceGroups.flatMap(([category, references]) =>
-    (references as unknown[]).flatMap((reference) => {
-      if (!isRecord(reference)) return [];
-      if (typeof reference.scan_error === "string") {
-        referenceScanErrors.push(`${category}: ${reference.scan_error}`);
-        return [];
-      }
-
-      const name =
-        typeof reference.name === "string" ? reference.name : undefined;
-      const snippet =
-        typeof reference.first_match_snippet === "string"
-          ? reference.first_match_snippet
-          : typeof reference.snippet === "string"
-            ? reference.snippet
-            : typeof reference.formula_snippet === "string"
-              ? reference.formula_snippet
-              : typeof reference.description === "string"
-                ? reference.description
-                : category === "Layout"
-                  ? "Field is present on this layout."
-                  : category === "Flow"
-                    ? "Field is referenced by this flow."
-                    : undefined;
-      const lineNumber =
-        typeof reference.first_match_line === "number"
-          ? reference.first_match_line
-          : typeof reference.line_number === "number"
-            ? reference.line_number
-            : undefined;
-      return [
-        {
-          type: typeof reference.type === "string" ? reference.type : category,
-          ...(typeof reference.id === "string" ? { id: reference.id } : {}),
-          ...(name ? { name } : {}),
-          ...(lineNumber !== undefined ? { line_number: lineNumber } : {}),
-          ...(snippet ? { snippet } : {}),
-          ...(typeof reference.formula_snippet === "string"
-            ? { description: reference.formula_snippet }
-            : {}),
-        },
-      ];
-    }),
-  );
-
-  const usageResult: SalesforceFieldUsage = {
-    object: result.object_api_name,
-    field: result.field_api_name,
-    total_records: usage.total_records,
-    populated_records: usage.populated_records,
-    usage_percentage: usage.usage_percentage,
-    zero_usage_candidate: usage.zero_usage_candidate,
-    recommendation_hint: usage.zero_usage_candidate
-      ? "Candidate for deprecation (0% population) - check references before deletion"
-      : `In use (${usage.usage_percentage}% populated) - retain`,
-  };
-  const referenceResult: SalesforceReferenceScan = {
-    has_references:
-      referenceScan.total_metadata_references > 0 ||
-      referenceScan.history_tracking_enabled,
-    reference_count: referenceScan.total_metadata_references,
-    summary: result.assessment_summary,
-    all_references: allReferences,
-  };
-
-  return {
-    usage: usageResult,
-    references: referenceResult,
-    referenceScanErrors,
-  };
-}
-
-async function executeAnalysisProposal(
-  objectName: string,
-  fieldName: string,
-): Promise<Proposal> {
-  const proposal = await GovernanceAPI.createProposal({
-    agent_id: ANALYSIS_AGENT_ID,
-    tool_id: "salesforce_full_field_assessment",
-    input_payload: { object_name: objectName, field_name: fieldName },
-  });
-
-  if (proposal.status !== "POLICY_APPROVED") {
-    throw new Error(
-      `Field assessment proposal was not approved for automatic execution (${proposal.status}).`,
-    );
-  }
-
-  await GovernanceAPI.executeProposal(proposal.id);
-  for (let attempt = 0; attempt < PROPOSAL_POLL_ATTEMPTS; attempt += 1) {
-    await new Promise((resolve) =>
-      window.setTimeout(resolve, PROPOSAL_POLL_INTERVAL_MS),
-    );
-    const current = await GovernanceAPI.getProposal(proposal.id);
-    if (current.status === "COMPLETED") return current;
-    if (current.status === "FAILED") {
-      throw new Error(
-        current.error_message || "Field assessment proposal execution failed.",
-      );
-    }
-    if (current.status !== "EXECUTING") {
-      throw new Error(
-        `Field assessment proposal entered an unexpected state (${current.status}).`,
-      );
-    }
-  }
-
-  throw new Error(
-    `Assessment is still running after five minutes. Check proposal ${proposal.id} in Proposals before starting another analysis.`,
-  );
 }
 
 function toDependencies(references: SalesforceReferenceScan): Dependency[] {
@@ -216,13 +55,18 @@ function toDependencies(references: SalesforceReferenceScan): Dependency[] {
 export default function DependencyViewerPage({
   initialObject = "",
   initialField = "",
+  autoAnalyze = false,
 }: {
   initialObject?: string;
   initialField?: string;
+  autoAnalyze?: boolean;
 }) {
+  const automaticAnalysisPending = useRef(autoAnalyze && !!initialObject && !!initialField);
   const selectedObjectRef = useRef(initialObject);
   const requestedFieldRef = useRef(initialField);
   const [objects, setObjects] = useState<SalesforceObjectSummary[]>([]);
+  const [target, setTarget] = useState("");
+  const [targetError, setTargetError] = useState<string | null>(null);
   const [object, setObject] = useState("");
   const [field, setField] = useState("");
   const [objectListLoading, setObjectListLoading] = useState(true);
@@ -234,6 +78,7 @@ export default function DependencyViewerPage({
   const [metadataLoading, setMetadataLoading] = useState(false);
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const [metadataRevision, setMetadataRevision] = useState(0);
+  const [assessment, setAssessment] = useState<{ object: string; field: string; response: unknown } | null>(null);
   const [analysis, setAnalysis] = useState<FieldAnalysis | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -315,41 +160,16 @@ export default function DependencyViewerPage({
     }
 
     try {
-      await GovernanceAPI.executeProposal(proposal.id);
-      for (let attempt = 0; attempt < PROPOSAL_POLL_ATTEMPTS; attempt += 1) {
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, PROPOSAL_POLL_INTERVAL_MS),
-        );
-        const current = await GovernanceAPI.getProposal(proposal.id);
-        if (current.status === "COMPLETED") {
-          const executionStatus =
-            typeof current.execution_result?.status === "string"
-              ? ` (${current.execution_result.status})`
-              : "";
-          toast.success(
-            `${label} completed${executionStatus}. Proposal ID: ${proposal.id}`,
-            "Proposal executed",
-          );
-          if (typeof current.execution_result?.warning === "string") {
-            toast.info(current.execution_result.warning, "Deprecation note");
-          }
-          setSubmittingToolId(null);
-          return;
-        }
-        if (current.status === "FAILED") {
-          throw new Error(
-            current.error_message || `${label} execution failed.`,
-          );
-        }
-        if (current.status !== "EXECUTING") {
-          throw new Error(
-            `Proposal entered an unexpected state (${current.status}).`,
-          );
-        }
+      const started = await GovernanceAPI.executeProposal(proposal.id);
+      if (started.status === "EXECUTING") toast.info(`Proposal ${proposal.id} is executing. Waiting for its result.`, "Execution in progress");
+      const execution = await waitForExecution(proposal.id, started);
+      if (execution.status === "EXECUTING") {
+        toast.info(`Proposal ${proposal.id} is still running. Check its progress in Proposals before submitting another change.`, "Execution in progress");
+        return;
       }
-      throw new Error(
-        `Execution is still running. Check proposal ${proposal.id} for its final status.`,
-      );
+      if (execution.status === "FAILED") throw new Error(execution.error_message || `Execution failed for proposal ${proposal.id}.`);
+      toast.success(`${label} succeeded. ${execution.execution_id ? `Execution ID: ${execution.execution_id}` : `Proposal ID: ${proposal.id}`}`, "Proposal executed");
+      if (typeof execution.result.warning === "string") toast.info(execution.result.warning, "Execution note");
     } catch (error) {
       toast.error(
         `Proposal ${proposal.id} was created, but execution did not complete: ${
@@ -361,6 +181,23 @@ export default function DependencyViewerPage({
       setSubmittingToolId(null);
     }
   };
+
+  const runAnalysis = useCallback(async (objectName: string, fieldName: string, signal?: AbortSignal) => {
+    setAnalysis(null);
+    setAnalysisError(null);
+    setAnalysisLoading(true);
+    try {
+      const [usage, references] = await Promise.all([
+        SalesforceAPI.fieldUsage(objectName, fieldName, signal),
+        SalesforceAPI.scanReferences(objectName, fieldName, signal),
+      ]);
+      if (!signal?.aborted) setAnalysis({ usage, references, referenceScanErrors: [] });
+    } catch (error) {
+      if (!signal?.aborted) setAnalysisError(error instanceof Error ? error.message : `Unable to analyze ${objectName}.${fieldName}.`);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -414,12 +251,20 @@ export default function DependencyViewerPage({
         if (controller.signal.aborted) return;
         setMetadata(description);
         const requestedField = requestedFieldRef.current;
+        if (requestedField && !description.fields.some((item) => item.name === requestedField)) {
+          setTargetError(`Field ${requestedField} was not found on ${object}.`);
+        }
         setField(
           description.fields.some((item) => item.name === requestedField)
             ? requestedField
             : (description.fields[0]?.name ?? ""),
         );
         requestedFieldRef.current = "";
+        if (automaticAnalysisPending.current && object === initialObject && requestedField === initialField &&
+          description.fields.some((item) => item.name === initialField)) {
+          automaticAnalysisPending.current = false;
+          void runAnalysis(object, initialField, controller.signal);
+        }
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -434,7 +279,7 @@ export default function DependencyViewerPage({
       });
 
     return () => controller.abort();
-  }, [object, metadataRevision]);
+  }, [object, metadataRevision, initialObject, initialField, runAnalysis]);
 
   useEffect(() => {
     const refreshAfterFieldDeletion = (event: Event) => {
@@ -489,24 +334,9 @@ export default function DependencyViewerPage({
     setAnalysisError(null);
   };
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = () => {
     if (!field || !fieldMetadata) return;
-    setAnalysis(null);
-    setAnalysisError(null);
-    setAnalysisLoading(true);
-
-    try {
-      const proposal = await executeAnalysisProposal(object, field);
-      setAnalysis(getFieldAssessmentResults(proposal));
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : `Unable to analyze ${object}.${field}.`;
-      setAnalysisError(message);
-    } finally {
-      setAnalysisLoading(false);
-    }
+    return runAnalysis(object, field);
   };
 
   const detail: FieldDetail = {
@@ -531,6 +361,41 @@ export default function DependencyViewerPage({
           changes.
         </p>
       </div>
+
+      <form className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const parts = target.trim().split(".");
+          const nextObject = objects.find((item) => item.name === parts[0]);
+          if (parts.length !== 2 || !nextObject || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(parts[1])) {
+            setTargetError("Enter a valid Object.Field, such as Account.Legacy_Id__c.");
+            return;
+          }
+          if (object === nextObject.name) {
+            if (!fields.includes(parts[1])) {
+              setTargetError("This field was not found on the selected object.");
+              return;
+            }
+            setField(parts[1]);
+            setAnalysis(null);
+            setAnalysisError(null);
+            setConfirmDelete(false);
+          } else {
+            requestedFieldRef.current = parts[1];
+            handleObjectChange(nextObject.name);
+          }
+          setTargetError(null);
+        }}>
+        <label htmlFor="dependency-target" className="block text-sm text-slate-300">Jump to Object.Field</label>
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+          <input id="dependency-target" value={target} onChange={(event) => setTarget(event.target.value)}
+            placeholder="Account.Legacy_Id__c" disabled={analysisLoading || metadataLoading || objectListLoading}
+            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" />
+          <button disabled={analysisLoading || metadataLoading || objectListLoading || !target.trim()}
+            className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold disabled:opacity-50">Select target</button>
+        </div>
+        {targetError && <p role="alert" className="mt-2 text-sm text-rose-300">{targetError}</p>}
+      </form>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl shadow-black/10">
         <div className="min-w-0 space-y-5 p-4 sm:p-5">
@@ -577,6 +442,22 @@ export default function DependencyViewerPage({
             }}
             onAnalyze={handleAnalyze}
           />
+          <button type="button" disabled={!object || !field || analysisLoading || metadataLoading || objectListLoading}
+            className="rounded-lg border border-blue-400/30 px-4 py-2 text-sm text-blue-300 disabled:opacity-50"
+            onClick={async () => {
+              setAnalysisLoading(true); setAnalysisError(null); setAssessment(null);
+              try {
+                const response = await SalesforceAPI.fullAssessment(object, field);
+                setAssessment({ object, field, response });
+              } catch (error) {
+                setAnalysisError(error instanceof Error ? error.message : "Unable to load full assessment.");
+              } finally { setAnalysisLoading(false); }
+            }}>Run full field assessment</button>
+          {assessment && assessment.object === object && assessment.field === field && <section aria-live="polite" className="rounded-xl border border-slate-800 p-4">
+            <h2 className="text-sm font-semibold">Full field assessment response</h2>
+            <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-300">{typeof assessment.response === "string" ? assessment.response : JSON.stringify(assessment.response, null, 2)}</pre>
+          </section>}
+
 
           {objectListError && (
             <div

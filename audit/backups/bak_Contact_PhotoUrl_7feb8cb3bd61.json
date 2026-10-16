@@ -1,0 +1,24 @@
+{
+  "backup_id": "bak_Contact_PhotoUrl_7feb8cb3bd61",
+  "created_at": "2026-10-15T11:49:09.911923+00:00",
+  "object_name": "Contact",
+  "field_name": "PhotoUrl",
+  "metadata": {
+    "name": "PhotoUrl",
+    "label": "Photo URL",
+    "type": "url",
+    "length": 255,
+    "precision": 0,
+    "scale": 0,
+    "nillable": true,
+    "createable": false,
+    "updateable": false,
+    "calculated": false,
+    "custom": false,
+    "filterable": true,
+    "encrypted": false,
+    "description": ""
+  },
+  "description": "",
+  "checksum": "0caccac784c4648f6a05221e6c3cb9bc1d6151589aa931607c4d1b16d1196c72"
+}
