@@ -5,14 +5,13 @@ CRUD for registered agent definitions.
 """
 
 import logging
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from control_plane.database import get_db
 from control_plane.models import Agent, AgentStatus
-from control_plane.schemas import AgentCreate, AgentResponse
+from control_plane.schemas import AgentCreate, AgentResponse, AgentStatusUpdate
 
 logger = logging.getLogger("cdm.api.agents")
 
@@ -61,14 +60,23 @@ def get_agent(agent_id: str, db: Session = Depends(get_db)):
 
 
 @router.patch("/{agent_id}/status")
-def update_agent_status(agent_id: str, status: str, db: Session = Depends(get_db)):
+def update_agent_status(
+    agent_id: str,
+    body: AgentStatusUpdate | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+):
     """Update agent status (IDLE, RUNNING, PAUSED, ERROR, TERMINATED)."""
+    requested_status = body.status if body is not None else status
+    if requested_status is None:
+        raise HTTPException(422, "A status is required in the JSON body or query string")
+
     agent = db.query(Agent).filter(Agent.agent_id == agent_id).first()
     if not agent:
         raise HTTPException(404, f"Agent '{agent_id}' not found")
 
     try:
-        new_status = AgentStatus(status)
+        new_status = AgentStatus(requested_status)
     except ValueError:
         raise HTTPException(400, f"Invalid status. Must be one of: {[s.value for s in AgentStatus]}")
 

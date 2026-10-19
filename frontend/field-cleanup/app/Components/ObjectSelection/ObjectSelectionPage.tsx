@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ObjectTable from "./ObjectTable";
 import SelectArea from "./SelectArea";
+import { SalesforceAPI, type BulkScanResult } from "@/app/lib/api/salesforce";
+import { ErrorNotice } from "../FieldTools/shared";
 
 export interface SalesforceObject {
   id: string;
@@ -13,19 +15,30 @@ export interface SalesforceObject {
 
 export type ObjectTypeFilter = "all" | "standard" | "custom";
 
-/* ---- Mock data (move to API/DB later) ---- */
-const OBJECTS: SalesforceObject[] = [
-  { id: "obj-1", name: "Opportunity",     type: "Standard", description: "Represents a potential sale to the opportunity potential sale." },
-  { id: "obj-2", name: "Autobase",        type: "Standard", description: "Represents a potential sale in takensosisine." },
-  { id: "obj-3", name: "CustomRaskard",   type: "Custom",   description: "Represents a potential sale to altormedia messager." },
-  { id: "obj-4", name: "Contact",         type: "Standard", description: "Represents a potential account, for contact." },
-  { id: "obj-5", name: "CustomObject__c", type: "Custom",   description: "Represents a potential sale to protential nopronuctive objects." },
-  { id: "obj-6", name: "Contacts",        type: "Standard", description: "Represents an individual account to the opportunity-claser names." },
-  { id: "obj-7", name: "CustomRiser",     type: "Custom",   description: "Represents a potential sale to contrimotor parmons." },
-  { id: "obj-8", name: "Contact",         type: "Standard", description: "Represents a potential sale ontion to mait alperature-eports." },
-];
-
 export default function ObjectSelectionPage() {
+  const [objects, setObjects] = useState<SalesforceObject[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState<BulkScanResult | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    SalesforceAPI.describeGlobal(controller.signal).then((response) => {
+      if (controller.signal.aborted) return;
+      setObjects(response.sobjects.map((item) => ({
+        id: item.name, name: item.name,
+        type: item.custom ? "Custom" : "Standard",
+        description: item.label,
+      })));
+      setError(null);
+    }).catch((reason: unknown) => {
+      if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Unable to load Salesforce objects.");
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
+    return () => controller.abort();
+  }, [revision]);
   const [search, setSearch] = useState("");
   const [objectType, setObjectType] = useState<ObjectTypeFilter>("all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -33,7 +46,7 @@ export default function ObjectSelectionPage() {
   /* Filter by type + search query */
   const filteredObjects = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return OBJECTS.filter((o) => {
+    return objects.filter((o) => {
       const matchesType =
         objectType === "all" || o.type.toLowerCase() === objectType;
       const matchesSearch =
@@ -43,7 +56,7 @@ export default function ObjectSelectionPage() {
         o.description.toLowerCase().includes(q);
       return matchesType && matchesSearch;
     });
-  }, [search, objectType]);
+  }, [objects, search, objectType]);
 
   const toggle = (id: string) => {
     setSelectedIds((prev) =>
@@ -57,10 +70,18 @@ export default function ObjectSelectionPage() {
       : previous.filter((id) => !ids.includes(id)));
   };
 
-  const handleInitiate = () => {
-    if (selectedIds.length === 0) return;
-    // TODO: hook into your toast + API
-    console.log("Initiate analysis for:", selectedIds);
+  const handleInitiate = async () => {
+    if (selectedIds.length === 0 || scanning) return;
+    setScanning(true);
+    setError(null);
+    setResult(null);
+    try {
+      setResult(await SalesforceAPI.bulkScan([...selectedIds], 0));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to scan selected objects.");
+    } finally {
+      setScanning(false);
+    }
   };
 
   return (
@@ -69,6 +90,10 @@ export default function ObjectSelectionPage() {
         Object Selection Page
       </h1>
 
+      {loading && <p role="status" className="p-3 text-sm text-slate-400">Loading Salesforce objects…</p>}
+      {error && <ErrorNotice>{error}<button type="button" className="ml-3 underline" onClick={() => { setLoading(true); setRevision((value) => value + 1); }}>Reload objects</button></ErrorNotice>}
+      {scanning && <p role="status" className="p-3 text-sm text-slate-400">Scanning selected Salesforce objects…</p>}
+      {result && <p role="status" className="p-3 text-sm text-slate-300">Scanned {result.total_custom_fields_scanned} fields: {result.total_candidates_found} cleanup candidates, {result.total_needs_review} need review, {result.total_active_in_use} active. Open Field Tools to review candidates and propose changes.</p>}
       <div className="rounded-lg border border-slate-700 bg-slate-900">
         <SelectArea
           search={search}
@@ -82,7 +107,8 @@ export default function ObjectSelectionPage() {
           selectedIds={selectedIds}
           onToggle={toggle}
           onToggleAll={toggleAll}
-          onInitiate={handleInitiate}
+          onInitiate={() => void handleInitiate()}
+          busy={scanning || loading}
         />
       </div>
     </div>

@@ -19,6 +19,8 @@ interface Outcome {
   id?: string;
   status: string;
   error?: string;
+  execution_id?: string;
+  result?: Record<string, unknown>;
 }
 
 export default function BulkProposals({
@@ -79,6 +81,7 @@ export default function BulkProposals({
                     ? {
                         ...item,
                         status: proposal.status,
+                        result: proposal.execution_result,
                         error: proposal.error_message,
                       }
                     : item,
@@ -158,7 +161,7 @@ export default function BulkProposals({
             setOutcomes((current) =>
               current.map((item) =>
                 item.field === key
-                  ? { field: key, id, status: execution.status }
+                  ? { field: key, id, status: execution.status, execution_id: execution.execution_id, result: execution.result }
                   : item,
               ),
             );
@@ -231,6 +234,7 @@ export default function BulkProposals({
                     Proposal {item.id}
                   </p>
                 )}
+                {item.result && <details className="mt-2"><summary className="cursor-pointer text-blue-300">{item.execution_id ? `Execution ${item.execution_id}` : `Proposal ${item.id}`}</summary><pre className="mt-2 overflow-auto whitespace-pre-wrap break-words">{JSON.stringify(item.result, null, 2)}</pre></details>}
                 {item.error && (
                   <p className="mt-1 text-rose-300">{item.error}</p>
                 )}
@@ -261,7 +265,7 @@ export default function BulkProposals({
           {fields.map((item) => (
             <li key={fieldKey(item)} className="break-all">
               {fieldKey(item)} · {item.usage_percentage}% population ·{" "}
-              {item.reference_count} references
+              {item.reference_count !== undefined ? `${item.reference_count} references` : item.has_references ? "References found; count not supplied" : item.has_references === false ? "No references found" : "References not supplied"}
             </li>
           ))}
         </ul>

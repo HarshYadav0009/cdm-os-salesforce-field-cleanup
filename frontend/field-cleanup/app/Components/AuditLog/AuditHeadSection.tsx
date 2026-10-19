@@ -29,7 +29,7 @@ interface AuditHeadSectionProps {
 
 export default function AuditHeadSection({
   title = "Audit Trail & Integrity",
-  description = "Review audit events, verify their payload signatures, and export the filtered report.",
+  description = "Review audit events and export the filtered report. Verify a proposal with its verification token.",
   search,
   onSearchChange,
   dateRange,
