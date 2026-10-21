@@ -1,11 +1,13 @@
 from typing import Dict, Any, List, Optional
 from fastmcp import FastMCP
 
+from .client import SalesforceClient
 from .metadata import SalesforceMetadataService
 from .field_usage import SalesforceFieldUsageService
 from .apex_scanner import SalesforceApexScanner
 from .backup_service import SalesforceBackupService
 from .deprecation_service import SalesforceFieldDeprecationService
+from .deletion_service import SalesforceFieldDeletionService
 from .bulk_scanner import SalesforceBulkScanner
 from .validators import validate_tool_payload
 
@@ -192,6 +194,42 @@ def salesforce_bulk_scan(
     return bulk_service.scan_objects(
         validated.get("object_names"),
         validated.get("threshold_percentage", 0.0)
+    )
+
+
+# ============================================================
+# CONTROLLED FIELD DELETION (TIER-3)
+# ============================================================
+
+@mcp.tool()
+def salesforce_delete_field(
+    object_name: str,
+    field_name: str,
+    confirm_delete: bool,
+    reason: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Permanently delete a custom Salesforce field.
+    Sequence: validate → backup → delete via Metadata API.
+
+    Safety checks enforced:
+    - Field must end in __c (custom field only)
+    - Field must not be a managed package field (namespace__Field__c)
+    - confirm_delete must be True (set only after human approval)
+    - A metadata backup is always created before deletion
+    """
+    validated = validate_tool_payload("salesforce_delete_field", {
+        "object_name": object_name,
+        "field_name": field_name,
+        "confirm_delete": confirm_delete,
+        "reason": reason,
+    })
+    deletion_service = SalesforceFieldDeletionService()
+    return deletion_service.delete_field(
+        object_name=validated["object_name"],
+        field_name=validated["field_name"],
+        confirm_delete=validated["confirm_delete"],
+        reason=validated.get("reason"),
     )
 
 

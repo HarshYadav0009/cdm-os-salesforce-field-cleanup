@@ -71,9 +71,18 @@ async def lifespan(app: FastAPI):
                 db.add(agent)
 
             tools_to_seed = [
+                # Tier-1: Read-only assessment tools — auto-approve, no human review needed
                 ("salesforce_full_field_assessment", "Full Field Safety Assessment", "Run metadata, population, and reference scan report", ToolTier.TIER_1),
+                ("salesforce_describe_global", "Describe Global Objects", "List all SObjects in the Salesforce org", ToolTier.TIER_1),
                 ("salesforce_describe_object", "Describe Object Metadata", "Retrieve object field definitions", ToolTier.TIER_1),
-                ("salesforce_query_field_usage", "Query Field Record Population", "Calculate record population %", ToolTier.TIER_2),
+                ("salesforce_query_field_usage", "Query Field Record Population", "Calculate record population %", ToolTier.TIER_1),  # Fixed: was incorrectly Tier-2
+                ("salesforce_scan_apex_references", "Scan Apex References", "Search Apex classes, triggers, flows for field references", ToolTier.TIER_1),
+                ("salesforce_bulk_scan", "Bulk Scan SObjects", "Execute bulk usage/reference scanning across SObjects", ToolTier.TIER_1),
+                # Tier-2: Controlled remediation — auto-approved by policy but audited
+                ("salesforce_backup_field_definition", "Backup Field Definition", "Export field metadata snapshot before modification", ToolTier.TIER_2),
+                ("salesforce_deprecate_field", "Deprecate Field", "Mark field deprecated (update description + remove FLS)", ToolTier.TIER_2),
+                ("salesforce_rollback_field", "Rollback Field", "Roll back a modified field to original state", ToolTier.TIER_2),
+                # Tier-3: Destructive — always require human approval
                 ("salesforce_delete_field", "Delete Custom Field", "Permanently delete custom field", ToolTier.TIER_3),
             ]
             for tool_id, name, desc, tier in tools_to_seed:

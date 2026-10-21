@@ -82,6 +82,12 @@ class ToolGatewayService:
                 "description": "Execute bulk usage and reference scanning across all custom SObjects",
                 "tier": "Tier-1",
             },
+            {
+                "tool_id": "salesforce_delete_field",
+                "name": "Delete Custom Field",
+                "description": "Permanently delete a custom field (validate → backup → delete via Metadata API)",
+                "tier": "Tier-3",
+            },
         ]
 
     async def describe_global(self) -> Dict[str, Any]:
@@ -136,6 +142,28 @@ class ToolGatewayService:
             validated.get("reason")
         )
 
+    async def delete_field(
+        self,
+        object_name: str,
+        field_name: str,
+        confirm_delete: bool,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        from servers.salesforce.deletion_service import SalesforceFieldDeletionService
+        validated = validate_tool_payload("salesforce_delete_field", {
+            "object_name": object_name,
+            "field_name": field_name,
+            "confirm_delete": confirm_delete,
+            "reason": reason,
+        })
+        service = SalesforceFieldDeletionService(client=self.salesforce.client if hasattr(self.salesforce, 'client') else None)
+        return service.delete_field(
+            object_name=validated["object_name"],
+            field_name=validated["field_name"],
+            confirm_delete=validated["confirm_delete"],
+            reason=validated.get("reason"),
+        )
+
     async def rollback_field(self, backup_id: str) -> Dict[str, Any]:
         validated = validate_tool_payload("salesforce_rollback_field", {"backup_id": backup_id})
         return await self.salesforce.rollback_field(validated["backup_id"])
@@ -181,6 +209,13 @@ class ToolGatewayService:
             )
         elif tool_name == "salesforce_rollback_field":
             return await self.rollback_field(payload.get("backup_id", ""))
+        elif tool_name == "salesforce_delete_field":
+            return await self.delete_field(
+                payload.get("object_name", ""),
+                payload.get("field_name", ""),
+                payload.get("confirm_delete", False),
+                payload.get("reason"),
+            )
         elif tool_name == "salesforce_bulk_scan":
             return await self.bulk_scan(
                 payload.get("object_names"),

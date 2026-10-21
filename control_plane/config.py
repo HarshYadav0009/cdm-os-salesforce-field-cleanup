@@ -59,8 +59,13 @@ class Settings(BaseSettings):
     POLICY_DEFINITIONS_PATH: str = "policy/definitions"
 
     # ── MCP Tool Gateway ──────────────────────────────────────
+    # Local dev default. Docker Compose overrides this to http://tool-gateway:8080
+    # via the MCP_GATEWAY_URL env var in docker-compose.yml.
+    # TOOL_GATEWAY_HOST can also be set to point at a remote gateway host.
+    MCP_GATEWAY_URL: str = "http://localhost:8080"
     MCP_GATEWAY_PORT: int = 8080
     MCP_REQUEST_TIMEOUT_SEC: int = 30
+    TOOL_GATEWAY_HOST: str = "localhost"
 
     # ── Audit ─────────────────────────────────────────────────
     AUDIT_HMAC_SECRET: str = "hmac-signing-key-for-audit-trail"

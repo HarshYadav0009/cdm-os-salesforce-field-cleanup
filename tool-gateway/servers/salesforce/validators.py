@@ -17,7 +17,9 @@ def validate_salesforce_identifier(value: str) -> str:
             f"Invalid Salesforce identifier '{value}'. Must begin with a letter and contain only alphanumeric characters or underscores."
         )
 
-    # Disallow consecutive underscores (violates Salesforce naming rules)
+    # Disallow consecutive underscores UNLESS this is a standard custom field (__c suffix)
+    # or a managed package field (namespace__Field__c — contains __ but ends with __c).
+    # Managed package detection happens in the deletion service for business-logic rejection.
     if "__" in value and not value.endswith("__c"):
         raise ValueError(f"Salesforce identifier cannot contain consecutive underscores: '{value}'")
 
@@ -89,6 +91,27 @@ class BulkScanSchema(BaseModel):
         return v
 
 
+class DeleteFieldSchema(BaseModel):
+    object_name: str = Field(..., description="Salesforce SObject API name")
+    field_name: str = Field(..., description="Salesforce custom field API name (must end in __c)")
+    confirm_delete: bool = Field(..., description="Must be True; set only after explicit human approval")
+    reason: Optional[str] = Field(None, description="Justification for deletion (written to audit trail)")
+
+    @field_validator("object_name")
+    def check_object(cls, v):
+        return validate_salesforce_identifier(v)
+
+    @field_validator("field_name")
+    def check_field(cls, v):
+        # Allow namespace__Field__c patterns here; business rejection happens in deletion_service
+        v = v.strip()
+        if not v:
+            raise ValueError("field_name must be a non-empty string.")
+        if not re.match(r"^[A-Za-z][A-Za-z0-9_]*$", v):
+            raise ValueError(f"Invalid field identifier '{v}'.")
+        return v
+
+
 # Map of tool_name to validation schema
 TOOL_PAYLOAD_SCHEMAS = {
     "salesforce_describe_object": DescribeObjectSchema,
@@ -99,6 +122,7 @@ TOOL_PAYLOAD_SCHEMAS = {
     "salesforce_backup_field_definition": BackupFieldSchema,
     "salesforce_rollback_field": RollbackFieldSchema,
     "salesforce_bulk_scan": BulkScanSchema,
+    "salesforce_delete_field": DeleteFieldSchema,
 }
 
 

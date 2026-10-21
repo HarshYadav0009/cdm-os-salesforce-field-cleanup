@@ -265,12 +265,19 @@ async def _run_tool_execution(
     """Background task: call Tool Gateway and update proposal status."""
     from control_plane.database import SessionLocal
 
-    gateway_url = f"http://127.0.0.1:{settings.MCP_GATEWAY_PORT}"
+    gateway_url = getattr(settings, "MCP_GATEWAY_URL", f"http://localhost:{settings.MCP_GATEWAY_PORT}")
     timeout = float(settings.MCP_REQUEST_TIMEOUT_SEC)
 
     endpoint_map = {
         "salesforce_describe_object": "/tools/salesforce/describe",
+        "salesforce_describe_global": "/tools/salesforce/describe-global",
         "salesforce_query_field_usage": "/tools/salesforce/field-usage",
+        "salesforce_scan_apex_references": "/tools/salesforce/apex-references",
+        "salesforce_backup_field_definition": "/tools/salesforce/backup",
+        "salesforce_deprecate_field": "/tools/salesforce/deprecate",
+        "salesforce_delete_field": "/tools/salesforce/delete",
+        "salesforce_rollback_field": "/tools/salesforce/rollback",
+        "salesforce_bulk_scan": "/tools/salesforce/bulk-scan",
         "salesforce_health_check": "/health",
     }
 
@@ -307,6 +314,30 @@ async def _run_tool_execution(
                     "tool_id": tool_id,
                     "result_summary": str(result)[:500],
                 }, proposal_id=proposal.id)
+
+                # ── Post-Execution Verification (Task 1.5) ────────────
+                # After deprecate or delete completes, confirm the field state changed
+                # by calling describe on the object. Non-fatal: log but don't fail.
+                if tool_id in {"salesforce_deprecate_field", "salesforce_delete_field"}:
+                    object_name = input_payload.get("object_name")
+                    if object_name:
+                        try:
+                            async with httpx.AsyncClient(timeout=timeout) as verify_client:
+                                verify_response = await verify_client.post(
+                                    f"{gateway_url}/tools/salesforce/describe",
+                                    json={"object_name": object_name},
+                                )
+                                verify_result = verify_response.json()
+                            proposal.execution_result["verification"] = verify_result
+                            record_event(db, "EXECUTION_VERIFIED", "system", {
+                                "tool_id": tool_id,
+                                "verification_summary": "post-change describe succeeded",
+                            }, proposal_id=proposal.id)
+                        except Exception as verify_exc:
+                            record_event(db, "VERIFICATION_SKIPPED", "system", {
+                                "reason": str(verify_exc),
+                            }, proposal_id=proposal.id)
+
                 db.commit()
 
     except Exception as exc:

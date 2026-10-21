@@ -100,6 +100,29 @@ class SalesforceMCPClient:
     async def rollback_field(self, backup_id: str) -> Dict[str, Any]:
         return await self._call_tool("salesforce_rollback_field", {"backup_id": backup_id})
 
+    async def delete_field(
+        self,
+        object_name: str,
+        field_name: str,
+        confirm_delete: bool,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Permanently delete a custom field via the MCP server.
+        Calls salesforce_delete_field which is backed by SalesforceFieldDeletionService
+        (validate → backup → delete via Metadata API).
+        confirm_delete must be True — only set by an explicit human approval step.
+        """
+        return await self._call_tool(
+            "salesforce_delete_field",
+            {
+                "object_name": object_name,
+                "field_name": field_name,
+                "confirm_delete": confirm_delete,
+                "reason": reason,
+            },
+        )
+
     async def bulk_scan(
         self,
         object_names: Optional[List[str]] = None,
@@ -108,4 +131,4 @@ class SalesforceMCPClient:
         return await self._call_tool(
             "salesforce_bulk_scan",
             {"object_names": object_names, "threshold_percentage": threshold_percentage}
-        )
+        )
